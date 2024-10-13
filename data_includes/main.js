@@ -2,7 +2,17 @@ PennController.ResetPrefix(null); // Initiates PennController
 PennController.DebugOff(); // turn off debugger
 PennController.SetCounter("setcounter");
 
-Sequence();
+Sequence(
+  "intro",
+  "consent",
+  "demo",
+  "inst-1",
+  "inst-2a",
+  "inst-4",
+  "break",
+  "send_results",
+  "bye2"
+);
 
 // IMPORTANT FUNCTIONS
 function getRandomStr() {
@@ -287,3 +297,31 @@ newTrial(
 );
 
 newTrial(newButton("Hello World").print().wait());
+
+
+
+// END OF EXPERIMENT!!!
+SendResults("send_results");
+
+newTrial("debrief", exitFullscreen(), newHtml("debrief.html").print().wait());
+
+newTrial(
+  "bye2",
+  newText("confirmation", "Thank you for participating in our study!")
+    .center()
+    .print(),
+  newText(".   ") // Adding space for formatting
+    .print()
+    .color("white"),
+  newText(
+    "The experiment code is XXXXX  " +
+      "Please paste this value into Prolific." +
+      "<p>You can also confirm your participation on Prolific by clicking the link below: " +
+      "<a href='https://app.prolific.com/submissions/complete?cc=XXXXX'>Confirm your participation.</a>" +
+      "<p>When you are finished, you may close this tab."
+  )
+    .center()
+    .bold()
+    .print(),
+  newTimer("infinite", 1000).wait()
+);
