@@ -29,6 +29,22 @@ function getRandomStr() {
 const s = getRandomStr();
 
 /// IMPORTANT VARIABLES
+var hideProgressBar = true;
+var headerFontSize = "36";
+var bodyFontSize = "22";
+var underline_blank = {
+  outline: "none",
+  resize: "none",
+  border: "0",
+  padding: "0",
+  margin: "0",
+  "margin-left": "1ex",
+  "margin-right": "1ex",
+  "vertical-align": "-.33em",
+  "background-color": "white",
+  "border-bottom": "2px solid black",
+  display: "inline",
+};
 var pageCss = {
   overflow: "auto",
   padding: "1em",
