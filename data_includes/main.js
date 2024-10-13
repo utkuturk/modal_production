@@ -10,6 +10,7 @@ Sequence(
   "inst-2a",
   "inst-4",
   "break",
+  answerConditionText,
   "send_results",
   "bye2"
 );
@@ -28,7 +29,15 @@ function getRandomStr() {
 // Generate a subject ID
 const s = getRandomStr();
 
+//Randomly assign the participant to one of the four answer conditions
+const answerConditions = ["bare", "haveto", "will", "probably"];
+const answerCondition = answerConditions[Math.floor(Math.random() * 4)];
+// Transform answerCondition to a text that can be used in the filter function
+const answerConditionText = answerConditions[answerCondition];
+
+
 /// IMPORTANT VARIABLES
+var fname = "example.csv";
 var hideProgressBar = true;
 var headerFontSize = "36";
 var bodyFontSize = "22";
@@ -315,6 +324,25 @@ newTrial(
 newTrial(newButton("Hello World").print().wait());
 
 
+// EXPERIMENTAL TRIALS
+var trial = (label) => (row) => {
+  return newTrial(label,
+    // Record the Trial Number
+    newVar("TrialN", 0).settings.global().set(v => v+1 ),
+    // DIALOGUE PART
+    // SELECTION PART
+    newText("Press any key to proceed")
+      .css({ "font-size": proceedFontSize })
+      .print("center at 50vw", "middle at 40vh"),
+    newKey("").wait(),
+  )
+
+};
+
+
+// Filter the table based on the answer condition
+
+Template(GetTable(fname).filter("inference", answerConditionText), trial(answerConditionText));
 
 // END OF EXPERIMENT!!!
 SendResults("send_results");

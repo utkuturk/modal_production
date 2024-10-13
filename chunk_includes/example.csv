@@ -1,0 +1,13 @@
+item,inference,answer,condition_name,condition,dialog1,dialog2,dialog3,dialog4,answer1,answer2,group
+1,a,bare,aBare,a,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",went,must go,
+1,d,bare,dBare,b,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",went,must go,
+1,i,bare,iBare,c,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",went,must go,
+1,a,haveto,aHaveTo,d,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",have to go,must go,
+1,d,haveto,dHaveTo,e,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",have to go,must go,
+1,i,haveto,iHaveTo,f,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",have to go,must go,
+1,a,will,aWill,g,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",will go,must go,
+1,d,will,dWill,h,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",will go,must go,
+1,i,will,iWill,i,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",will go,must go,
+1,a,probably,aProbably,j,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",probably go,must go,
+1,d,probably,dProbably,k,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",probably go,must go,
+1,i,probably,iProbably,l,Did you go to school?,"No, I didn't.","Of course, you didn't","Shut up, I _____.",probably go,must go,
