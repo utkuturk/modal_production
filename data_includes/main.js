@@ -2,19 +2,6 @@ PennController.ResetPrefix(null); // Initiates PennController
 PennController.DebugOff(); // turn off debugger
 PennController.SetCounter("setcounter");
 
-Sequence(
-  "intro",
-  "consent",
-  "demo",
-  "inst-1",
-  "inst-2a",
-  "inst-4",
-  "break",
-  answerConditionText,
-  "send_results",
-  "bye2"
-);
-
 // IMPORTANT FUNCTIONS
 function getRandomStr() {
   const LENGTH = 8;
@@ -29,6 +16,37 @@ function getRandomStr() {
 // Generate a subject ID
 const s = getRandomStr();
 
+
+//for inserting breaks
+function SepWithN(sep, main, n) {
+  this.args = [sep, main];
+
+  this.run = function (arrays) {
+    assert(
+      arrays.length == 2,
+      "Wrong number of arguments (or bad argument) to SepWithN"
+    );
+    assert(parseInt(n) > 0, "N must be a positive number");
+    let sep = arrays[0];
+    let main = arrays[1];
+
+    if (main.length <= 1) return main;
+    else {
+      let newArray = [];
+      while (main.length) {
+        for (let i = 0; i < n && main.length > 0; i++)
+          newArray.push(main.pop());
+        for (let j = 0; j < sep.length && main.length > 0; ++j)
+          newArray.push(sep[j]);
+      }
+      return newArray;
+    }
+  };
+}
+function sepWithN(sep, main, n) {
+  return new SepWithN(sep, main, n);
+}
+
 //Randomly assign the participant to one of the four answer conditions
 const answerConditions = ["bare", "haveto", "will", "probably"];
 const answerCondition = answerConditions[Math.floor(Math.random() * 4)];
@@ -36,11 +54,26 @@ const answerCondition = answerConditions[Math.floor(Math.random() * 4)];
 const answerConditionText = answerConditions[answerCondition];
 
 
+Sequence(
+  "intro",
+  "consent",
+  "demo",
+  "inst-1",
+  "inst-2a",
+  "inst-4",
+  "break",
+  sepWithN("break", rshuffle("trial", "filler"), 30),
+  "send_results",
+  "bye2"
+);
+
 /// IMPORTANT VARIABLES
 var fname = "example.csv";
+var fname_filler = "example.csv";
 var hideProgressBar = true;
 var headerFontSize = "36";
 var bodyFontSize = "22";
+var proceedFontSize = "30";
 var underline_blank = {
   outline: "none",
   resize: "none",
@@ -321,7 +354,6 @@ newTrial(
   newKey("anykey58", "").wait()
 );
 
-newTrial(newButton("Hello World").print().wait());
 
 
 // EXPERIMENTAL TRIALS
@@ -341,16 +373,27 @@ var trial = (label) => (row) => {
 
 
 // Filter the table based on the answer condition
+Template(
+  GetTable(fname)
+    .filter("answer", answerCondition)
+  ,
+  trial("trial")
+);
 
-Template(GetTable(fname).filter("inference", answerConditionText), trial(answerConditionText));
+Template(
+  GetTable(fname_filler)
+  ,
+  trial("filler")
+);
 
 // END OF EXPERIMENT!!!
 SendResults("send_results");
 
-newTrial("debrief", exitFullscreen(), newHtml("debrief.html").print().wait());
+// newTrial("debrief", exitFullscreen(), newHtml("debrief.html").print().wait());
 
 newTrial(
   "bye2",
+  exitFullscreen(),
   newText("confirmation", "Thank you for participating in our study!")
     .center()
     .print(),
