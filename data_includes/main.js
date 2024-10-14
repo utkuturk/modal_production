@@ -74,6 +74,7 @@ var hideProgressBar = true;
 var headerFontSize = "36";
 var bodyFontSize = "22";
 var proceedFontSize = "30";
+
 var underline_blank = {
   outline: "none",
   resize: "none",
@@ -87,6 +88,7 @@ var underline_blank = {
   "border-bottom": "2px solid black",
   display: "inline",
 };
+
 var pageCss = {
   overflow: "auto",
   padding: "1em",
@@ -358,16 +360,63 @@ newTrial(
 
 // EXPERIMENTAL TRIALS
 var trial = (label) => (row) => {
-  return newTrial(label,
+  return newTrial(
+    label,
     // Record the Trial Number
-    newVar("TrialN", 0).settings.global().set(v => v+1 ),
-    // DIALOGUE PART
+    newVar("TrialN", 0)
+      .settings.global()
+      .set((v) => v + 1),
+    // INTRODUCE ELEMENTS
+    // SPEAKER LIST
+    // You can introduce them from the csv file as well. row.speaker1, row.speaker2, etc.
+    // DIALOGUES
+    newText("dia1", "A: " + row.dialog1),
+    newText("dia2", "B: " + row.dialog2),
+    newText("dia3", "A: " + row.dialog3),
+    newText("dia4", "B: " + row.dialog4),
+    // ANSWERS
+    newText("a1", row.answer1)
+      .settings.css("border", "solid 2px grey")
+      .settings.css("padding", "5px"),
+    newText("a2", row.answer2)
+      .css("border", "solid 2px grey")
+      .settings.css("padding", "5px"),
+
+    newTimer("timeout", 5000).start(),
+
+    newCanvas("dialogue", 500, 200)
+      .add("left at 10%", 10, getText("dia1"))
+      .add("left at 10%", 40, getText("dia2"))
+      .add("left at 10%", 70, getText("dia3"))
+      .add("left at 10%", 100, getText("dia4"))
+      .add("left at 65%", 160, getText("a1"))
+      .add("left at 25%", 160, getText("a2"))
+      .print()
+      .center()
+      .css("font-size", "20px")
+      .settings.css("border", "solid 5px grey")
+      .settings.css("margin", "10px"),
+    // .print("center at 50vw", "middle at 50vh"),
+
+    newSelector("comparison")
+      .add(getText("a1"), getText("a2"))
+      .shuffle()
+      .keys("F", "J")
+      .once()
+      .log()
+      .callback(getTimer("timeout").stop()),
+
+    // TIMER
+    getTimer("timeout").wait(), // D
+
+    getCanvas("dialogue").remove(),
+    getSelector("comparison").remove(),
     // SELECTION PART
     newText("Press any key to proceed")
       .css({ "font-size": proceedFontSize })
       .print("center at 50vw", "middle at 40vh"),
-    newKey("").wait(),
-  )
+    newKey("").wait()
+  );
 
 };
 
