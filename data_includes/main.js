@@ -74,6 +74,8 @@ var hideProgressBar = true;
 var headerFontSize = "36";
 var bodyFontSize = "22";
 var proceedFontSize = "30";
+var timeout = 5000;
+var dialogFontSize = "20px";
 
 var underline_blank = {
   outline: "none",
@@ -103,6 +105,17 @@ var textCss = {
   // "width": "50em"
 };
 
+var dialogCss = {
+  "font-size": dialogFontSize,
+  "border" : "solid 5px grey",
+  "margin": "10px"
+};
+
+var answerCss = {
+  "border": "solid 2px grey",
+  "padding": "5px",
+};
+
 var buttonCss = {
   "background-color": "#E03A3E",
   color: "white",
@@ -115,6 +128,35 @@ var buttonCss = {
   border: "none", // Remove default button border
   display: "block", // To center the button
 };
+
+
+// Header for the CSV file
+Header(
+  newVar("id").global(),
+  newVar("inference_type").global(),
+  newVar("item").global(),
+  newVar("answer_type").global(),
+  newVar("condition_name").global(),
+  newVar("condition").global(),
+  newVar("answer1").global(),
+  newVar("answer2").global(),
+  newVar("RT").global(),
+  newVar("trialNum").global()
+)
+  .log("id", GetURLParameter("id"))
+  .log("inference_type", getVar("inference_type"))
+  .log("item", getVar("item"))
+  .log("answer_type", getVar("answer_type"))
+  .log("condition_name", getVar("condition_name"))
+  .log("condition", getVar("condition"))
+  .log("answer1", getVar("answer1"))
+  .log("answer2", getVar("answer2"))
+  .log("RT", getVar("RT"))
+  .log("trialNum", getVar("trialNum"));
+
+      getVar("RT").set(getVar("RT")),
+      getVar("trialNum").set(getVar("TrialN"));
+
 
 // INTRO
 
@@ -368,21 +410,18 @@ var trial = (label) => (row) => {
       .set((v) => v + 1),
     // INTRODUCE ELEMENTS
     // SPEAKER LIST
-    // You can introduce them from the csv file as well. row.speaker1, row.speaker2, etc.
+    // You can introduce them from the csv file as well. row.speaker1 + ": " + row.dialog1bana i, row.speaker2, etc.
     // DIALOGUES
     newText("dia1", "A: " + row.dialog1),
     newText("dia2", "B: " + row.dialog2),
     newText("dia3", "A: " + row.dialog3),
     newText("dia4", "B: " + row.dialog4),
-    // ANSWERS
-    newText("a1", row.answer1)
-      .settings.css("border", "solid 2px grey")
-      .settings.css("padding", "5px"),
-    newText("a2", row.answer2)
-      .css("border", "solid 2px grey")
-      .settings.css("padding", "5px"),
 
-    newTimer("timeout", 5000).start(),
+    // ANSWERS
+    newText("a1", row.answer1).cssContainer(answerCss),
+    newText("a2", row.answer2).cssContainer(answerCss),
+
+    newTimer("timeout", timeout).start(),
 
     newCanvas("dialogue", 500, 200)
       .add("left at 10%", 10, getText("dia1"))
@@ -393,10 +432,7 @@ var trial = (label) => (row) => {
       .add("left at 25%", 160, getText("a2"))
       .print()
       .center()
-      .css("font-size", "20px")
-      .settings.css("border", "solid 5px grey")
-      .settings.css("margin", "10px"),
-    // .print("center at 50vw", "middle at 50vh"),
+      .cssContainer(dialogCss),
 
     newSelector("comparison")
       .add(getText("a1"), getText("a2"))
@@ -407,7 +443,10 @@ var trial = (label) => (row) => {
       .callback(getTimer("timeout").stop()),
 
     // TIMER
-    getTimer("timeout").wait(), // D
+    getTimer("timeout").wait(),
+
+    // GET RT
+    getVar("RT").set((v) => Date.now() - v),
 
     getCanvas("dialogue").remove(),
     getSelector("comparison").remove(),
@@ -415,7 +454,16 @@ var trial = (label) => (row) => {
     newText("Press any key to proceed")
       .css({ "font-size": proceedFontSize })
       .print("center at 50vw", "middle at 40vh"),
-    newKey("").wait()
+    newKey("").wait(),
+    getVar("inference_type").set(row.inference),
+    getVar("item").set(row.item),
+    getVar("answer_type").set(row.answer),
+    getVar("condition_name").set(row.condition_name),
+    getVar("condition").set(row.condition),
+    getVar("answer1").set(row.answer1),
+    getVar("answer2").set(row.answer2),
+    getVar("RT").set(getVar("RT")),
+    getVar("trialNum").set(getVar("TrialN"))
   );
 
 };
