@@ -132,7 +132,8 @@ var buttonCss = {
 
 // Header for the CSV file
 Header(
-  newVar("id").global(),
+  newVar("subject").global,
+  // newVar("id").global(), // This is for Prolific
   newVar("inference_type").global(),
   newVar("item").global(),
   newVar("answer_type").global(),
@@ -143,7 +144,8 @@ Header(
   newVar("RT").global(),
   newVar("trialNum").global()
 )
-  .log("id", GetURLParameter("id"))
+  .log("subject", s)
+  // .log("id", GetURLParameter("id")) // This is for Prolific
   .log("inference_type", getVar("inference_type"))
   .log("item", getVar("item"))
   .log("answer_type", getVar("answer_type"))
