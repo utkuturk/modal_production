@@ -1,21 +1,15 @@
+// ! Todos
+// ! Ask whether you want to log choose RT, or read+choose RT
+// ! Put the placement of RT variable accordingly.
+// ! Practice items
+// ! Choose fillers
+// ! According to filler choice, write the randomization code
+// ! Prolific experiment
+// ! How the trials should look like
+
 PennController.ResetPrefix(null); // Initiates PennController
-PennController.DebugOff(); // turn off debugger
-PennController.SetCounter("setcounter");
-
-// IMPORTANT FUNCTIONS
-function getRandomStr() {
-  const LENGTH = 8;
-  const SOURCE = "abcdefghijklmnopqrstuvwxyz";
-  let result = "";
-
-  for (let i = 0; i < LENGTH; i++) {
-    result += SOURCE[Math.floor(Math.random() * SOURCE.length)];
-  }
-  return result;
-}
-// Generate a subject ID
-const s = getRandomStr();
-
+DebugOff(); // turn off debugger
+SetCounter("setcounter");
 
 //for inserting breaks
 function SepWithN(sep, main, n) {
@@ -55,13 +49,14 @@ const answerConditionText = answerConditions[answerCondition];
 
 
 Sequence(
+  "setcounter",
   "intro",
   "consent",
   "demo",
   "inst-1",
   "inst-2a",
-  "inst-4",
-  "break",
+  // randomize("practice"),
+  "exp-start",
   sepWithN("break", rshuffle("trial", "filler"), 30),
   "send_results",
   "bye2"
@@ -132,7 +127,7 @@ var buttonCss = {
 
 // Header for the CSV file
 Header(
-  newVar("subject").global,
+  // newVar("subject").global,
   // newVar("id").global(), // This is for Prolific
   newVar("inference_type").global(),
   newVar("item").global(),
@@ -144,7 +139,7 @@ Header(
   newVar("RT").global(),
   newVar("trialNum").global()
 )
-  .log("subject", s)
+  // .log("subject", s)
   // .log("id", GetURLParameter("id")) // This is for Prolific
   .log("inference_type", getVar("inference_type"))
   .log("item", getVar("item"))
@@ -155,10 +150,6 @@ Header(
   .log("answer2", getVar("answer2"))
   .log("RT", getVar("RT"))
   .log("trialNum", getVar("trialNum"));
-
-      getVar("RT").set(getVar("RT")),
-      getVar("trialNum").set(getVar("TrialN"));
-
 
 // INTRO
 
@@ -250,7 +241,7 @@ newTrial(
     .lines(1)
     .css(underline_blank)
     .log(),
-  newCanvas("page2", "500px", 350)
+  newCanvas("page2", 1500, 350)
     .add(100, 20, newImage("umdling2", "umd_ling.png").size("60%", "auto"))
     .add(
       0,
@@ -367,7 +358,8 @@ newTrial(
 
 
 newTrial(
-  "inst-4",
+  "exp-start",
+  fullscreen(),
   newText(
     "inst-4-body",
     "<p>Please move to a quiet environment so that there are no background sounds " +
@@ -384,8 +376,7 @@ newTrial(
     .cssContainer(pageCss)
     .print(),
   newText("<p>").print(),
-  newButton("CONTINUE").bold().css(buttonCss).print().wait(),
-  fullscreen()
+  newButton("CONTINUE").bold().css(buttonCss).print().wait()
 );
 
 
@@ -393,11 +384,11 @@ newTrial(
 newTrial(
   "break",
   newText(
-    "Let's take a short break! Press any key to continue when you are ready."
+    "Let's take a short break! Press space key to continue when you are ready."
   )
     .css({ "font-size": headerFontSize })
     .print("center at 50vw", "middle at 40vh"),
-  newKey("anykey58", "").wait()
+  newKey(" ").wait()
 );
 
 
@@ -448,15 +439,15 @@ var trial = (label) => (row) => {
     getTimer("timeout").wait(),
 
     // GET RT
-    getVar("RT").set((v) => Date.now() - v),
+    getVar("RT").set((v) => Date.now() - v), //
 
     getCanvas("dialogue").remove(),
     getSelector("comparison").remove(),
     // SELECTION PART
-    newText("Press any key to proceed")
+    newText("Press space key to proceed")
       .css({ "font-size": proceedFontSize })
       .print("center at 50vw", "middle at 40vh"),
-    newKey("").wait(),
+    newKey(" ").wait(),
     getVar("inference_type").set(row.inference),
     getVar("item").set(row.item),
     getVar("answer_type").set(row.answer),
