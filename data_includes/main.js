@@ -8,7 +8,6 @@ var answerCondition = answerConditions[Math.floor(Math.random() * 4)];
 // Transform answerCondition to a text that can be used in the filter function
 var answerConditionText = answerConditions[answerCondition];
 
-
 // Header for the CSV file
 Header(
   // newVar("subject").global,
@@ -60,7 +59,6 @@ Sequence(
   "debrief"
 );
 
-
 //for inserting breaks
 function SepWithN(sep, main, n) {
   this.args = [sep, main];
@@ -91,9 +89,6 @@ function sepWithN(sep, main, n) {
   return new SepWithN(sep, main, n);
 }
 
-
-
-
 /// IMPORTANT VARIABLES
 var fname = answerCondition + ".csv";
 var fname_practice = "practice.csv";
@@ -101,9 +96,9 @@ var hideProgressBar = true;
 var headerFontSize = "36";
 var bodyFontSize = "22";
 var proceedFontSize = "30";
-var dialogue_timeout = 5000;
-var answer_timeout = 5000;
-var dialogFontSize = "20px";
+var dialogue_timeout = 120000;
+var answer_timeout = 60000;
+var dialogFontSize = "24px";
 
 var underline_blank = {
   outline: "none",
@@ -121,6 +116,8 @@ var underline_blank = {
 
 var pageCss = {
   overflow: "auto",
+  width: "600px",
+  "max-width": "600px",
   padding: "1em",
   "box-shadow": "4px 4px 2px #cacfd2",
   border: "1px solid #cacfd2",
@@ -135,14 +132,17 @@ var textCss = {
 
 var dialogCss = {
   "font-size": dialogFontSize,
-//   "border" : "solid 5px grey",
-//   "margin": "10px"
+  width: "700px",
+  "max-width": "700px",
+  //   "border" : "solid 5px grey",
+  //   "margin": "10px"
 };
 
 var answerCss = {
-  "box-sizing": "content-box",
-  "border": "solid 2px grey",
-  "padding": "5px",
+  "box-sizing": "border-box",
+  border: "solid 2px grey",
+  padding: "5px",
+  "max-width": "700px",
 };
 
 var buttonCss = {
@@ -157,7 +157,6 @@ var buttonCss = {
   border: "none", // Remove default button border
   display: "block", // To center the button
 };
-
 
 newTrial(
   "intro",
@@ -181,24 +180,19 @@ newTrial(
     .cssContainer(pageCss)
     .print(),
   newText("<p>").print(),
-  newButton("CONTINUE").bold().css(buttonCss).print()
-  ,
-  newSelector()
-        .add(getButton("CONTINUE"))
-        .keys( " " )
-        .wait()
+  newButton("CONTINUE").bold().css(buttonCss).print(),
+  newSelector().add(getButton("CONTINUE")).keys(" ").wait()
 ).setOption("hideProgressBar", true);
-
 
 newTrial(
   "consent",
   newText(
     "consent-body",
     "<center><b>Consent Form</b></center>" +
-      "<p>Please click <a target='_blank' rel='noopener noreferrer' href='XXX'> here</a> to download the consent form for this study. If you read it and agree to participate in this study, click 'I Agree' below. If you do not agree to participate in this study, you can leave this study by closing the tab. You can leave the experiment at any time by closing the tab during the experiment. If you leave the experiment before completion of both parts, you will not be compensated for your time. If you encounter any problems, do not hesitate to reach us either via " +
+      "<p>Please click <a target='_blank' rel='noopener noreferrer' href='irb.pdf'> here</a> to download the consent form for this study. If you read it and agree to participate in this study, click 'I Agree' below. If you do not agree to participate in this study, you can leave this study by closing the tab. You can leave the experiment at any time by closing the tab during the experiment. If you leave the experiment before completion of both parts, you will not be compensated for your time. If you encounter any problems, do not hesitate to reach us either via " +
       // "Prolific or e-mail." +
       "email. " +
-      "<br><br><b> Researchers:</b> <br>Sarah Boukendour<sup>*</sup> <i> (sboukend@umd.edu)</i>, Utku Turk<sup>*</sup>, Alexander Williams<sup>*</sup>, Dan Goodhue<sup>&dagger;</sup>, Valentine Hacquard<sup>*</sup>, <br><sup>*</sup> University of Maryland, Department of Linguistics <br> <sup>&dagger;</sup> Dan's Affiliation"
+      "<br><br><b> Researchers:</b> <br>Sarah Boukendour<sup>*</sup> <i> (sboukend@umd.edu)</i>, Utku Turk<sup>*</sup>, Alexander Williams<sup>*</sup>, Dan Goodhue<sup>&dagger;</sup>, Valentine Hacquard<sup>*</sup> <br><sup>*</sup> University of Maryland, Department of Linguistics <br> <sup>&dagger;</sup>  Leibniz-Centre for General Linguistics (ZAS), Berlin, Germany"
   ),
   newCanvas("consent-page", 1500, 400)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
@@ -206,12 +200,8 @@ newTrial(
     .cssContainer(pageCss)
     .print(),
   newText("<p>").print(),
-  newButton("agree", "I AGREE").bold().css(buttonCss).print()
-  ,
-  newSelector()
-        .add(getButton("agree"))
-        .keys( " " )
-        .wait()
+  newButton("agree", "I AGREE").bold().css(buttonCss).print(),
+  newSelector().add(getButton("agree")).keys(" ").wait()
 ).setOption("hideProgressBar", true);
 
 newTrial(
@@ -230,7 +220,7 @@ newTrial(
     .css(underline_blank)
     .log(),
   newTextInput("geo")
-    .before(newText("Location (state, country):").size("15em", "1.5em"))
+    .before(newText("Location (state, country)*:").size("15em", "1.5em"))
     .size("15em", "1.5em")
     .lines(1)
     .css(underline_blank)
@@ -324,7 +314,6 @@ newTrial(
     )
 ).setOption("hideProgressBar", true);
 
-
 // INSTRUCTIONS
 
 newTrial(
@@ -332,70 +321,44 @@ newTrial(
   newText(
     "inst-1a-body",
     " <p>Please read this instruction carefully! </p>" +
-      "<p>In each trial in this experiment, You will see dialogues like the one below. Your task is to read the dialogue carefully and choose the best completion.</p>" +
-      "<p>You’ll be presented with the dialogue first. </p>"
-  )
-  ,
-  newText("inst-1b-body",
-  "<p><b>A:</b> Whenever it’s foggy in the morning, flights from Oliver Municipal Airport are delayed.</p>" +
-      "<p><b>B:</b> I just heard from a friend at Oliver, and she said it was foggy early today.</p>" +
-      "<p><b>A:</b> Well, if it was foggy this morning...</p>" +
+      "<p>In each trial in this experiment, you will see dialogues like the one on the next page. Your task is to read the dialogue carefully and choose the best completion.</p>" +
+      "<p>You’ll be presented with the dialogue first. <b>You will have 15 seconds to read the dialogue.</b></p>"
+  ),
+  newText(
+    "inst-1b-body",
+    "<p><b>Speaker A:</b> Whenever it’s foggy in the morning, flights from Oliver Municipal Airport are delayed.</p>" +
+      "<p><b>Speaker B:</b> I just heard from a friend at Oliver, and she said it was foggy early today.</p>" +
+      "<p><b>Speaker A:</b> Well, if it was foggy this morning...</p>" +
       "<div class='box'>Then, you’ll need to press <b>SPACE</b> to see the possible continuations.</div>"
-  )
-  ,
-  newText("inst-1c-body",
-  "<p>...the flights from Oliver Airport might’ve been delayed.</p>" +
+  ),
+  newText(
+    "inst-1c-body",
+    "<p>...the flights from Oliver Airport might’ve been delayed.</p>" +
       "<p>...the flights from Oliver Airport must’ve been delayed.</p>" +
-      "<div class='box'><b>Please pick your answers intuitively—these are not trick questions. Follow your gut instinct and go with the first answer that comes to mind. Try not to overthink it. </b></div>" +
+      "<div class='box'>Please pick your answers intuitively—these are not trick questions. Follow your gut instinct and go with the first answer that comes to mind. Try not to overthink it. </div>" +
       "<p>Let’s go through an example. Some examples you encounter during the experiment might feel obvious to you..."
-  )
-  ,
+  ),
   newCanvas("inst-1-page", 1500, 300)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
     .add(0, 120, getText("inst-1a-body"))
     .cssContainer(pageCss)
-    .print()
-  ,
-  newText("<p>").print()
-  ,
-  newButton("c1","CONTINUE").bold().css(buttonCss).print()
-  ,
-  newSelector()
-        .add(getButton("c1"))
-        .keys( " " )
-        .wait()
-  ,
-  getCanvas("inst-1-page").remove()
-  ,
-  getButton("c1").remove()
-  ,
-  getText("inst-1b-body").print()
-  ,
-  newText("<p>").print()
-  ,
-  newButton("c2","CONTINUE").bold().css(buttonCss).print()
-  ,
-  newSelector()
-        .add(getButton("c2"))
-        .keys( " " )
-        .wait()
-  ,
-  getText("inst-1b-body").remove()
-  ,
-  getButton("c2").remove()
-  ,
-  getText("inst-1c-body").print()
-  ,
-  newText("<p>").print()
-  ,
-  newButton("c3", "CONTINUE").bold().css(buttonCss).print()
-  ,
-  newSelector()
-        .add(getButton("c3"))
-        .keys( " " )
-        .wait()
+    .print(),
+  newText("<p>").print(),
+  newButton("c1", "CONTINUE").bold().css(buttonCss).print(),
+  newSelector().add(getButton("c1")).keys(" ").wait(),
+  getCanvas("inst-1-page").remove(),
+  getButton("c1").remove(),
+  getText("inst-1b-body").css({ "font-size": dialogFontSize }).print(),
+  newText("<p>").print(),
+  newButton("c2", "CONTINUE").bold().css(buttonCss).print(),
+  newSelector().add(getButton("c2")).keys(" ").wait(),
+  getText("inst-1b-body").remove(),
+  getButton("c2").remove(),
+  getText("inst-1c-body").css({ "font-size": dialogFontSize }).print(),
+  newText("<p>").print(),
+  newButton("c3", "CONTINUE").bold().css(buttonCss).print(),
+  newSelector().add(getButton("c3")).keys(" ").wait()
 );
-
 
 // newTrial("inst-2",
 //     newText("Some examples you encounter during the experiment might feel obvious to you...").print()
@@ -416,91 +379,103 @@ var trial_inst = (label) => (row) => {
     // Record the Trial Number
     newVar("TrialN", 0)
       .settings.global()
-      .set((v) => v + 1)
-    ,
+      .set((v) => v + 1),
     // INTRODUCE ELEMENTS
     // SPEAKER LIST
     // You can introduce them from the csv file as well. row.speaker1 + ": " + row.dialog1bana i, row.speaker2, etc.
     // DIALOGUES
-    newText("dia1", "<b>A:</b> " + row.dialog1 + "<br><br>")
-    ,
-    newText("dia2", "<b>B:</b> " + row.dialog2 + "<br><br>")
-    ,
-    newText("dia3", "<b>A:</b> " + row.dialog3 + "<br><br>")
-    ,
-    newTimer("dialogue_timeout", dialogue_timeout).start()
-    ,
-    newVar("dialogue_RT").global().set( v => Date.now() )
-    ,
-    getText("dia1").css(dialogCss).print()
-    ,
-    getText("dia2").css(dialogCss).print()
-    ,
-    getText("dia3").css(dialogCss).print()
-    ,
-    newKey("show_answers"," ").callback( getTimer("dialogue_timeout").stop() )
-    ,
-    getVar("dialogue_RT").set( v => Date.now() - v )
-    ,
-    getTimer("dialogue_timeout").wait()
-    ,
-    getKey("show_answers")
-        .test.pressed(" ")
-        // .success(
-        //     getSelector("comparison").test.selected(row.check)
-        //     .success( newText("<p style=color:darkgreen padding-bottom: 25px>Correct!</p>").bold().print() )
-        //     .failure( newText("<p style=color:red padding-bottom: 25px>That was incorrect! Please be more careful.</p>").bold().print() )
-        //     )
-        .failure( newText("contextslow","<p style=color:red padding-bottom: 25px>Try to read faster!</p>").bold().css(dialogCss).center().print(), newTimer("contextslow",2000).start().wait(), getText("contextslow").remove() )
-    ,
+    newText("sA1", "<b>Speaker A:</b> "),
+    newText("sA2", "<b>Speaker B:</b> "),
+    newText("sA3", "<b>Speaker A:</b> "),
+    newText("dia1", row.dialog1 + "<br><br>"),
+    newText("dia2", row.dialog2 + "<br><br>"),
+    newText("dia3", row.dialog3 + "<br><br>"),
+    newTimer("dialogue_timeout", dialogue_timeout).start(),
+    newVar("dialogue_RT")
+      .global()
+      .set((v) => Date.now()),
+    newCanvas("dialogue", 800, 300)
+      .add("left at 1%", 10, getText("sA1").css(dialogCss))
+      .add("left at 23%", 10, getText("dia1").css(dialogCss))
+      .add("left at 1%", 100, getText("sA2").css(dialogCss))
+      .add("left at 23%", 100, getText("dia2").css(dialogCss))
+      .add("left at 1%", 200, getText("sA3").css(dialogCss))
+      .add("left at 23%", 200, getText("dia3").css(dialogCss))
+      .css({ width: "100px", "max-width": "1000px" })
+      .print(),
+    // getText("dia1").css(dialogCss).print(),
+    // getText("dia2").css(dialogCss).print(),
+    // getText("dia3").css(dialogCss).print(),
+    newKey("show_answers", " ").callback(getTimer("dialogue_timeout").stop()),
+    getVar("dialogue_RT").set((v) => Date.now() - v),
+    getTimer("dialogue_timeout").wait(),
+    // getKey("show_answers")
+    //   .test.pressed(" ")
+    //   // .success(
+    //   //     getSelector("comparison").test.selected(row.check)
+    //   //     .success( newText("<p style=color:darkgreen padding-bottom: 25px>Correct!</p>").bold().print() )
+    //   //     .failure( newText("<p style=color:red padding-bottom: 25px>That was incorrect! Please be more careful.</p>").bold().print() )
+    //   //     )
+    //   .failure(
+    //     newText(
+    //       "contextslow",
+    //       "<p style=color:red padding-bottom: 25px>Try to read faster!</p>"
+    //     )
+    //       .bold()
+    //       .css(dialogCss)
+    //       .center()
+    //       .print(),
+    //     newTimer("contextslow", 2000).start().wait(),
+    //     getText("contextslow").remove()
+    //   ),
     // ANSWERS
-    newTimer("answer_timeout", answer_timeout).start()
-    ,
+    newTimer("answer_timeout", answer_timeout).start(),
     // PRINT FEEDBACK
-    newVar("answer_RT").global().set( v => Date.now() )
-    ,
-    newText("a1", row.answer1).cssContainer(answerCss)
-    ,
-    newText("a2", row.answer2).cssContainer(answerCss)
-    ,
-    newCanvas("answers", 500,100)
-        .add("left at 5%", 10, getText("a1"))
-        .add("left at 5%", 80, getText("a2"))
-        .print()
-        .cssContainer(dialogCss)
-    ,
+    newVar("answer_RT")
+      .global()
+      .set((v) => Date.now()),
+    newText("a1", row.answer1).cssContainer(answerCss),
+    newText("a2", row.answer2).cssContainer(answerCss),
+    newCanvas("answers", 500, 120)
+      .add("left at 5%", 10, getText("a1"))
+      .add("left at 5%", 120, getText("a2"))
+      .print()
+      .cssContainer(dialogCss),
     newSelector("comparison")
       .add(getText("a1"), getText("a2"))
       .shuffle()
-    //   .keys("F", "J")
+      //   .keys("F", "J")
       .once()
       .log()
       .callback(getTimer("answer_timeout").stop()),
 
     // TIMER
-    getTimer("answer_timeout").wait()
-    ,
+    getTimer("answer_timeout").wait(),
     // GET RT
-    getVar("answer_RT").set( v => Date.now() - v )
-    ,
+    getVar("answer_RT").set((v) => Date.now() - v),
     getCanvas("answers").remove(),
-    getText("dia1").remove()
-    ,
-    getText("dia2").remove()
-    ,
-    getText("dia3").remove()
-    ,
+    getText("dia1").remove(),
+    getText("dia2").remove(),
+    getText("dia3").remove(),
     getSelector("comparison").remove(),
-    getSelector("comparison")
-            .test.selected()
-            // .success(
-            //     getSelector("comparison").test.selected(row.check)
-            //     .success( newText("<p style=color:darkgreen padding-bottom: 25px>Correct!</p>").bold().print() )
-            //     .failure( newText("<p style=color:red padding-bottom: 25px>That was incorrect! Please be more careful.</p>").bold().print() )
-            //     )
-            .failure( newText("answerslow","<p style=color:red padding-bottom: 25px>Try to answer faster!</p>").bold().css(dialogCss).center().print(), newTimer("answerslow",2000).start().wait() )
-        ,
-
+    // getSelector("comparison")
+    //   .test.selected()
+    //   // .success(
+    //   //     getSelector("comparison").test.selected(row.check)
+    //   //     .success( newText("<p style=color:darkgreen padding-bottom: 25px>Correct!</p>").bold().print() )
+    //   //     .failure( newText("<p style=color:red padding-bottom: 25px>That was incorrect! Please be more careful.</p>").bold().print() )
+    //   //     )
+    //   .failure(
+    //     newText(
+    //       "answerslow",
+    //       "<p style=color:red padding-bottom: 25px>Try to answer faster!</p>"
+    //     )
+    //       .bold()
+    //       .css(dialogCss)
+    //       .center()
+    //       .print(),
+    //     newTimer("answerslow", 2000).start().wait()
+    //   ),
     // SELECTION PART
     // newText("Press space key to proceed")
     //   .css({ "font-size": proceedFontSize })
@@ -522,47 +497,49 @@ var trial_inst = (label) => (row) => {
     getVar("AnswerRT").set(getVar("answer_RT")),
     getVar("TrialNumber").set(getVar("TrialN"))
   );
-
 };
 
-Template(GetTable(fname_practice).filter("condition_name", "obvious_example"), trial_inst("inst-3"));
-
-newTrial("inst-4",
-    newText("Others may not feel so obvious to you, but you’ll still need to choose what you feel is the best option out of the two provided.").print()
-    ,
-    newText("<p>").print()
-  ,
-  newButton("see", "See an example").bold().css(buttonCss).print()
-  ,
-  newSelector()
-        .add(getButton("see"))
-        .keys( " " )
-        .wait()
+Template(
+  GetTable(fname_practice).filter("condition_name", "obvious_example"),
+  trial_inst("inst-3")
 );
 
-Template(GetTable(fname_practice).filter("condition_name", "negobvious_example"), trial_inst("inst-5"));
-
-newTrial("inst-6",
-    newText("Got it? Now let’s move on to a few more practice items to help you adjust to the task.").print()
-    ,
-    newText("<p>").print()
-  ,
-  newButton("see", "See an example").bold().css(buttonCss).print()
-  ,
-  newSelector()
-        .add(getButton("see"))
-        .keys( " " )
-        .wait()
+newTrial(
+  "inst-4",
+  newText(
+    "Others may not feel so obvious to you, but you’ll still need to choose what you feel is the best option out of the two provided."
+  ).print(),
+  newText("<p>").print(),
+  newButton("see", "See an example").bold().css(buttonCss).print(),
+  newSelector().add(getButton("see")).keys(" ").wait()
 );
 
-Template(GetTable(fname_practice).filter("condition_name", /practice/), trial_inst("prac-rest"));
+Template(
+  GetTable(fname_practice).filter("condition_name", "negobvious_example"),
+  trial_inst("inst-5")
+);
+
+newTrial(
+  "inst-6",
+  newText(
+    "Got it? Now let’s move on to a few more practice items to help you adjust to the task."
+  ).print(),
+  newText("<p>").print(),
+  newButton("see", "See an example").bold().css(buttonCss).print(),
+  newSelector().add(getButton("see")).keys(" ").wait()
+);
+
+Template(
+  GetTable(fname_practice).filter("condition_name", /practice/),
+  trial_inst("prac-rest")
+);
 
 newTrial(
   "exp-start",
   fullscreen(),
   newText(
     "inst-4-body",
-      "<p>When you are ready, please turn off any distractions " +
+    "<p>When you are ready, please turn off any distractions " +
       "such as music, television, or your cell phone for the duration of the experiment, " +
       "and click below to continue to the familiarization section. Thank you!"
   ),
@@ -575,7 +552,6 @@ newTrial(
   newButton("CONTINUE").bold().css(buttonCss).print().wait()
 );
 
-
 // BREAK BETWEEN TRIALS
 newTrial(
   "break",
@@ -587,76 +563,64 @@ newTrial(
   newKey(" ").wait()
 );
 
-
-
 // EXPERIMENTAL TRIALS
 var trial = (label) => (row) => {
   return newTrial(
     label,
     newVar("TrialN", 0)
       .settings.global()
-      .set((v) => v + 1)
-    ,
+      .set((v) => v + 1),
     // DIALOGUES
-    newText("dia1", "<b>A:</b> " + row.dialog1 + "<br><br>")
-    ,
-    newText("dia2", "<b>B:</b> " + row.dialog2 + "<br><br>")
-    ,
-    newText("dia3", "<b>A:</b> " + row.dialog3 + "<br><br>")
-    ,
-    newTimer("dialogue_timeout", dialogue_timeout).start()
-    ,
-    newVar("dialogue_RT").global().set( v => Date.now() )
-    ,
-    getText("dia1").css(dialogCss).print()
-    ,
-    getText("dia2").css(dialogCss).print()
-    ,
-    getText("dia3").css(dialogCss).print()
-    ,
-    newKey("show_answers"," ").callback( getTimer("dialogue_timeout").stop() )
-    ,
-    getVar("dialogue_RT").set( v => Date.now() - v )
-    ,
-    getTimer("dialogue_timeout").wait()
-    ,
+    newText("sA1", "<b>Speaker A:</b> "),
+    newText("sA2", "<b>Speaker B:</b> "),
+    newText("sA3", "<b>Speaker A:</b> "),
+    newText("dia1", row.dialog1 + "<br><br>"),
+    newText("dia2", row.dialog2 + "<br><br>"),
+    newText("dia3", row.dialog3 + "<br><br>"),
+    newTimer("dialogue_timeout", dialogue_timeout).start(),
+    newVar("dialogue_RT")
+      .global()
+      .set((v) => Date.now()),
+    newCanvas("dialogue", 1500, 300)
+      .add("left at 1%", 10, getText("sA1").css(dialogCss))
+      .add("left at 23%", 10, getText("dia1").css(dialogCss))
+      .add("left at 1%", 100, getText("sA2").css(dialogCss))
+      .add("left at 23%", 100, getText("dia2").css(dialogCss))
+      .add("left at 1%", 200, getText("sA3").css(dialogCss))
+      .add("left at 23%", 200, getText("dia3").css(dialogCss))
+      .print(),
+    newKey("show_answers", " ").callback(getTimer("dialogue_timeout").stop()),
+    getVar("dialogue_RT").set((v) => Date.now() - v),
+    getTimer("dialogue_timeout").wait(),
     // ANSWERS
-    newTimer("answer_timeout", answer_timeout).start()
-    ,
+    newTimer("answer_timeout", answer_timeout).start(),
     // PRINT FEEDBACK
-    newVar("answer_RT").global().set( v => Date.now() )
-    ,
-    newText("a1", row.answer1).cssContainer(answerCss)
-    ,
-    newText("a2", row.answer2).cssContainer(answerCss)
-    ,
-    newCanvas("answers", 500,100)
-        .add("left at 5%", 10, getText("a1"))
-        .add("left at 5%", 80, getText("a2"))
-        .print()
-        .cssContainer(dialogCss)
-    ,
+    newVar("answer_RT")
+      .global()
+      .set((v) => Date.now()),
+    newText("a1", row.answer1).cssContainer(answerCss),
+    newText("a2", row.answer2).cssContainer(answerCss),
+    newCanvas("answers", 500, 120)
+      .add("left at 5%", 10, getText("a1"))
+      .add("left at 5%", 120, getText("a2"))
+      .print()
+      .cssContainer(dialogCss),
     newSelector("comparison")
       .add(getText("a1"), getText("a2"))
       .shuffle()
-    //   .keys("F", "J")
+      //   .keys("F", "J")
       .once()
       .log()
       .callback(getTimer("answer_timeout").stop()),
 
     // TIMER
-    getTimer("answer_timeout").wait()
-    ,
+    getTimer("answer_timeout").wait(),
     // GET RT
-    getVar("answer_RT").set( v => Date.now() - v )
-    ,
+    getVar("answer_RT").set((v) => Date.now() - v),
     getCanvas("answers").remove(),
-    getText("dia1").remove()
-    ,
-    getText("dia2").remove()
-    ,
-    getText("dia3").remove()
-    ,
+    getText("dia1").remove(),
+    getText("dia2").remove(),
+    getText("dia3").remove(),
     getSelector("comparison").remove(),
     // SELECTION PART
     // newText("Press space key to proceed")
@@ -679,14 +643,12 @@ var trial = (label) => (row) => {
     getVar("AnswerRT").set(getVar("answer_RT")),
     getVar("TrialNumber").set(getVar("TrialN"))
   );
-
 };
 
-
 // Filter the table based on the answer condition
-Template(GetTable(fname).filter("Type", "exp"),trial("trial"));
-Template(GetTable(fname).filter("Type", "filler"),trial("filler"));
-Template(GetTable(fname).filter("Type", "check"),trial("check"));
+Template(GetTable(fname).filter("Type", "exp"), trial("trial"));
+Template(GetTable(fname).filter("Type", "filler"), trial("filler"));
+Template(GetTable(fname).filter("Type", "check"), trial("check"));
 
 // END OF EXPERIMENT!!!
 SendResults("send_results");
