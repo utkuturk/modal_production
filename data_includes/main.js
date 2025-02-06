@@ -94,7 +94,7 @@ var fname = answerCondition + ".csv";
 var fname_practice = "practice.csv";
 var hideProgressBar = true;
 var headerFontSize = "36";
-var bodyFontSize = "22";
+var bodyFontSize = "24px";
 var proceedFontSize = "30";
 var dialogue_timeout = 120000;
 var answer_timeout = 60000;
@@ -116,8 +116,8 @@ var underline_blank = {
 
 var pageCss = {
   overflow: "auto",
-  width: "600px",
-  "max-width": "600px",
+  width: "700px",
+  "max-width": "700px",
   padding: "1em",
   "box-shadow": "4px 4px 2px #cacfd2",
   border: "1px solid #cacfd2",
@@ -127,7 +127,63 @@ var pageCss = {
 var textCss = {
   "text-align": "center",
   margin: "0 auto",
+  "font-size": dialogFontSize,
+  "font-family": "sans-serif",
   // "width": "50em"
+};
+
+
+
+const speakerpageCss = {
+  "font-family": "sans-serif",
+  width: "700px",
+  "max-width": "700px",
+};
+
+const speakerStyle = {
+  "font-family": "sans-serif",
+  "background-color": "#db8b76",
+  color: "white", // White text for better contrast
+  "font-size": dialogFontSize,
+  padding: "0.25em 0.5em", // Reduced padding (top/bottom, left/right)
+  "border-radius": "0.25em",
+  margin: "10px auto", // Added margin for spacing and centering
+  "text-align": "center",
+  border: "none",
+  display: "block",
+  // width: "700px",
+  "max-width": "700px",
+};
+
+const speakerdialogCss = {
+  "font-size": dialogFontSize,
+  "font-family": "sans-serif",
+  "background-color": "#fff",
+  border: "1px solid #ddd",
+  "border-radius": "8px",
+  "box-shadow": "2px 2px 5px rgba(0,0,0,0.1)",
+  padding: "0.75em", // Reduced padding
+  margin: "10px auto",
+  "line-height": "1.5",
+  width: "700px",
+  "max-width": "700px",
+};
+
+var answerCss = {
+  "box-sizing": "border-box",
+  border: "solid 2px #ddd",
+  padding: "15px",
+  "max-width": "700px",
+  "background-color": "#f9f9f9",
+  "border-radius": "8px",
+  "box-shadow": "2px 2px 5px rgba(0,0,0,0.1)",
+  "font-family": "sans-serif",
+  "line-height": "1.6",
+  ":hover": {
+    // Add the hover styles here
+    "background-color": "#f2f2f2",
+    "box-shadow": "3px 3px 8px rgba(0,0,0,0.15)",
+  },
 };
 
 var dialogCss = {
@@ -137,14 +193,6 @@ var dialogCss = {
   //   "border" : "solid 5px grey",
   //   "margin": "10px"
 };
-
-var answerCss = {
-  "box-sizing": "border-box",
-  border: "solid 2px grey",
-  padding: "5px",
-  "max-width": "700px",
-};
-
 var buttonCss = {
   "background-color": "#E03A3E",
   color: "white",
@@ -173,8 +221,8 @@ newTrial(
       "<li>You are a native speaker of <b>American English</b>,</li>" +
       "<li>You are <b>older than 18</b> years old,</li>" +
       "<li>This is your <b>first time doing this experiment</b>,</li></ol>"
-  ),
-  newCanvas("welcome-page", 600, 400)
+  ).css(textCss),
+  newCanvas("welcome-page", 700, 500)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
     .add(0, 120, getText("welcome-body"))
     .cssContainer(pageCss)
@@ -193,8 +241,8 @@ newTrial(
       // "Prolific or e-mail." +
       "email. " +
       "<br><br><b> Researchers:</b> <br>Sarah Boukendour<sup>*</sup> <i> (sboukend@umd.edu)</i>, Utku Turk<sup>*</sup>, Alexander Williams<sup>*</sup>, Dan Goodhue<sup>&dagger;</sup>, Valentine Hacquard<sup>*</sup> <br><sup>*</sup> University of Maryland, Department of Linguistics <br> <sup>&dagger;</sup>  Leibniz-Centre for General Linguistics (ZAS), Berlin, Germany"
-  ),
-  newCanvas("consent-page", 1500, 400)
+  ).css(textCss),
+  newCanvas("consent-page", 1500, 600)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
     .add(0, 120, getText("consent-body"))
     .cssContainer(pageCss)
@@ -207,59 +255,67 @@ newTrial(
 newTrial(
   "demo",
   newTextInput("age")
-    .before(newText("Age*:").size("15em", "1.5em"))
-    .size("15em", "1.5em")
+    .before(newText("Age*:").css(textCss).size("17em", "1.5em"))
+    .size("17em", "1.5em")
     .lines(1)
     .css(underline_blank)
     .center()
     .log(),
   newTextInput("gender")
-    .before(newText("Gender*:").size("15em", "1.5em"))
-    .size("15em", "1.5em")
+    .before(newText("Gender*:").css(textCss).size("17em", "1.5em"))
+    .size("17em", "1.5em")
     .lines(1)
     .css(underline_blank)
     .log(),
   newTextInput("geo")
-    .before(newText("Location (state, country)*:").size("15em", "1.5em"))
-    .size("15em", "1.5em")
+    .before(
+      newText("Location (state, country)*:").css(textCss).size("17em", "1.5em")
+    )
+    .size("17em", "1.5em")
     .lines(1)
     .css(underline_blank)
     .log(),
   newTextInput("comp")
-    .before(newText("Computer type (e.g. Mac, PC)*:").size("15em", "1.5em"))
-    .size("15em", "1.5em")
+    .before(
+      newText("Computer type (e.g. Mac, PC)*:")
+        .css(textCss)
+        .size("17em", "1.5em")
+    )
+    .size("17em", "1.5em")
     .lines(1)
     .css(underline_blank)
     .log(),
   newTextInput("language")
-    .before(newText("Native language*:").size("15em", "1.5em"))
-    .size("15em", "1.5em")
+    .before(newText("Native language*:").css(textCss).size("17em", "1.5em"))
+    .size("17em", "1.5em")
     .lines(1)
     .css(underline_blank)
     .log(),
   newTextInput("otherlg")
     .before(
-      newText("Other languages you speak (please list):").size("15em", "1.5em")
+      newText("Other languages you speak (please list):")
+        .css(textCss)
+        .size("17em", "1.5em")
     )
-    .size("15em", "1.5em")
+    .size("17em", "1.5em")
     .lines(1)
     .css(underline_blank)
     .log(),
-  newCanvas("page2", 1500, 350)
+  newCanvas("page2", 1500, 450)
     .add(100, 20, newImage("umdling2", "umd_ling.png").size("60%", "auto"))
     .add(
       0,
-      120,
+      130,
       newText(
         "Make sure that you entered all the information below. Obligatory ones are marked with *."
-      )
+      ).css(textCss)
     )
-    .add(0, 160, getTextInput("age"))
-    .add(0, 190, getTextInput("gender"))
-    .add(0, 220, getTextInput("geo"))
-    .add(0, 250, getTextInput("comp"))
-    .add(0, 280, getTextInput("language"))
-    .add(0, 310, getTextInput("otherlg"))
+    .add(0, 190, getTextInput("age"))
+    .add(0, 230, getTextInput("gender"))
+    .add(0, 270, getTextInput("geo"))
+    .add(0, 310, getTextInput("comp"))
+    .add(0, 350, getTextInput("language"))
+    .add(0, 390, getTextInput("otherlg"))
     .cssContainer(pageCss)
     .print(),
   newText("<p>").print(),
@@ -323,7 +379,7 @@ newTrial(
     " <p>Please read this instruction carefully! </p>" +
       "<p>In each trial in this experiment, you will see dialogues like the one on the next page. Your task is to read the dialogue carefully and choose the best completion.</p>" +
       "<p>You’ll be presented with the dialogue first. <b>You will have 15 seconds to read the dialogue.</b></p>"
-  ),
+  ).css(textCss),
   newText(
     "inst-1b-body",
     "<p><b>Speaker A:</b> Whenever it’s foggy in the morning, flights from Oliver Municipal Airport are delayed.</p>" +
@@ -338,7 +394,7 @@ newTrial(
       "<div class='box'>Please pick your answers intuitively—these are not trick questions. Follow your gut instinct and go with the first answer that comes to mind. Try not to overthink it. </div>" +
       "<p>Let’s go through an example. Some examples you encounter during the experiment might feel obvious to you..."
   ),
-  newCanvas("inst-1-page", 1500, 300)
+  newCanvas("inst-1-page", 1500, 400)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
     .add(0, 120, getText("inst-1a-body"))
     .cssContainer(pageCss)
@@ -360,18 +416,6 @@ newTrial(
   newSelector().add(getButton("c3")).keys(" ").wait()
 );
 
-// newTrial("inst-2",
-//     newText("Some examples you encounter during the experiment might feel obvious to you...").print()
-//     ,
-//     newText("<p>").print()
-//   ,
-//   newButton("see", "See an example").bold().css(buttonCss).print()
-//   ,
-//   newSelector()
-//         .add(getButton("see"))
-//         .keys( " " )
-//         .wait()
-// );
 
 var trial_inst = (label) => (row) => {
   return newTrial(
@@ -382,52 +426,31 @@ var trial_inst = (label) => (row) => {
       .set((v) => v + 1),
     // INTRODUCE ELEMENTS
     // SPEAKER LIST
-    // You can introduce them from the csv file as well. row.speaker1 + ": " + row.dialog1bana i, row.speaker2, etc.
     // DIALOGUES
     newText("sA1", "<b>Speaker A:</b> "),
     newText("sA2", "<b>Speaker B:</b> "),
     newText("sA3", "<b>Speaker A:</b> "),
-    newText("dia1", row.dialog1 + "<br><br>"),
-    newText("dia2", row.dialog2 + "<br><br>"),
-    newText("dia3", row.dialog3 + "<br><br>"),
+    newText("dia1", row.dialog1 ),
+    newText("dia2", row.dialog2 ),
+    newText("dia3", row.dialog3 ),
     newTimer("dialogue_timeout", dialogue_timeout).start(),
     newVar("dialogue_RT")
       .global()
       .set((v) => Date.now()),
-    newCanvas("dialogue", 800, 300)
-      .add("left at 1%", 10, getText("sA1").css(dialogCss))
-      .add("left at 23%", 10, getText("dia1").css(dialogCss))
-      .add("left at 1%", 100, getText("sA2").css(dialogCss))
-      .add("left at 23%", 100, getText("dia2").css(dialogCss))
-      .add("left at 1%", 200, getText("sA3").css(dialogCss))
-      .add("left at 23%", 200, getText("dia3").css(dialogCss))
-      .css({ width: "100px", "max-width": "1000px" })
+    newCanvas("dialogue", 1500, 300)
+      .add("left at 1%", 10, getText("sA1").css(speakerStyle))
+      .add("left at 23%", 10, getText("dia1").css(speakerdialogCss))
+      .add("left at 1%", 130, getText("sA2").css(speakerStyle))
+      .add("left at 23%", 130, getText("dia2").css(speakerdialogCss))
+      .add("left at 1%", 250, getText("sA3").css(speakerStyle))
+      .add("left at 23%", 250, getText("dia3").css(speakerdialogCss))
+      // .css({ width: "100px", "max-width": "1000px" })
+      .css(speakerpageCss)
       .print(),
-    // getText("dia1").css(dialogCss).print(),
-    // getText("dia2").css(dialogCss).print(),
-    // getText("dia3").css(dialogCss).print(),
     newKey("show_answers", " ").callback(getTimer("dialogue_timeout").stop()),
     getVar("dialogue_RT").set((v) => Date.now() - v),
     getTimer("dialogue_timeout").wait(),
-    // getKey("show_answers")
-    //   .test.pressed(" ")
-    //   // .success(
-    //   //     getSelector("comparison").test.selected(row.check)
-    //   //     .success( newText("<p style=color:darkgreen padding-bottom: 25px>Correct!</p>").bold().print() )
-    //   //     .failure( newText("<p style=color:red padding-bottom: 25px>That was incorrect! Please be more careful.</p>").bold().print() )
-    //   //     )
-    //   .failure(
-    //     newText(
-    //       "contextslow",
-    //       "<p style=color:red padding-bottom: 25px>Try to read faster!</p>"
-    //     )
-    //       .bold()
-    //       .css(dialogCss)
-    //       .center()
-    //       .print(),
-    //     newTimer("contextslow", 2000).start().wait(),
-    //     getText("contextslow").remove()
-    //   ),
+
     // ANSWERS
     newTimer("answer_timeout", answer_timeout).start(),
     // PRINT FEEDBACK
@@ -436,9 +459,9 @@ var trial_inst = (label) => (row) => {
       .set((v) => Date.now()),
     newText("a1", row.answer1).cssContainer(answerCss),
     newText("a2", row.answer2).cssContainer(answerCss),
-    newCanvas("answers", 500, 120)
-      .add("left at 5%", 10, getText("a1"))
-      .add("left at 5%", 120, getText("a2"))
+    newCanvas("answers", 1500, 120)
+      .add("left at 5%", 50, getText("a1"))
+      .add("left at 5%", 160, getText("a2"))
       .print()
       .cssContainer(dialogCss),
     newSelector("comparison")
@@ -458,29 +481,9 @@ var trial_inst = (label) => (row) => {
     getText("dia2").remove(),
     getText("dia3").remove(),
     getSelector("comparison").remove(),
-    // getSelector("comparison")
-    //   .test.selected()
-    //   // .success(
-    //   //     getSelector("comparison").test.selected(row.check)
-    //   //     .success( newText("<p style=color:darkgreen padding-bottom: 25px>Correct!</p>").bold().print() )
-    //   //     .failure( newText("<p style=color:red padding-bottom: 25px>That was incorrect! Please be more careful.</p>").bold().print() )
-    //   //     )
-    //   .failure(
-    //     newText(
-    //       "answerslow",
-    //       "<p style=color:red padding-bottom: 25px>Try to answer faster!</p>"
-    //     )
-    //       .bold()
-    //       .css(dialogCss)
-    //       .center()
-    //       .print(),
-    //     newTimer("answerslow", 2000).start().wait()
-    //   ),
-    // SELECTION PART
-    // newText("Press space key to proceed")
-    //   .css({ "font-size": proceedFontSize })
-    //   .print("center at 50vw", "middle at 40vh"),
-    // newKey(" ").wait(),
+
+    // RECORD STUFF
+
     getVar("Type").set(row.Type),
     getVar("Group").set("practice"),
     getVar("Item").set(row.item),
@@ -508,7 +511,7 @@ newTrial(
   "inst-4",
   newText(
     "Others may not feel so obvious to you, but you’ll still need to choose what you feel is the best option out of the two provided."
-  ).print(),
+  ).css(textCss).print(),
   newText("<p>").print(),
   newButton("see", "See an example").bold().css(buttonCss).print(),
   newSelector().add(getButton("see")).keys(" ").wait()
@@ -523,7 +526,7 @@ newTrial(
   "inst-6",
   newText(
     "Got it? Now let’s move on to a few more practice items to help you adjust to the task."
-  ).print(),
+  ).css(textCss).print(),
   newText("<p>").print(),
   newButton("see", "See an example").bold().css(buttonCss).print(),
   newSelector().add(getButton("see")).keys(" ").wait()
@@ -542,7 +545,7 @@ newTrial(
     "<p>When you are ready, please turn off any distractions " +
       "such as music, television, or your cell phone for the duration of the experiment, " +
       "and click below to continue to the familiarization section. Thank you!"
-  ),
+  ).css(textCss),
   newCanvas("inst-4-page", 1500, 300)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
     .add(0, 130, getText("inst-4-body"))
@@ -574,20 +577,21 @@ var trial = (label) => (row) => {
     newText("sA1", "<b>Speaker A:</b> "),
     newText("sA2", "<b>Speaker B:</b> "),
     newText("sA3", "<b>Speaker A:</b> "),
-    newText("dia1", row.dialog1 + "<br><br>"),
-    newText("dia2", row.dialog2 + "<br><br>"),
-    newText("dia3", row.dialog3 + "<br><br>"),
+    newText("dia1", row.dialog1),
+    newText("dia2", row.dialog2),
+    newText("dia3", row.dialog3),
     newTimer("dialogue_timeout", dialogue_timeout).start(),
     newVar("dialogue_RT")
       .global()
       .set((v) => Date.now()),
     newCanvas("dialogue", 1500, 300)
-      .add("left at 1%", 10, getText("sA1").css(dialogCss))
-      .add("left at 23%", 10, getText("dia1").css(dialogCss))
-      .add("left at 1%", 100, getText("sA2").css(dialogCss))
-      .add("left at 23%", 100, getText("dia2").css(dialogCss))
-      .add("left at 1%", 200, getText("sA3").css(dialogCss))
-      .add("left at 23%", 200, getText("dia3").css(dialogCss))
+      .add("left at 1%", 10, getText("sA1").css(speakerStyle))
+      .add("left at 23%", 10, getText("dia1").css(speakerdialogCss))
+      .add("left at 1%", 130, getText("sA2").css(speakerStyle))
+      .add("left at 23%", 130, getText("dia2").css(speakerdialogCss))
+      .add("left at 1%", 250, getText("sA3").css(speakerStyle))
+      .add("left at 23%", 250, getText("dia3").css(speakerdialogCss))
+      .css(speakerpageCss)
       .print(),
     newKey("show_answers", " ").callback(getTimer("dialogue_timeout").stop()),
     getVar("dialogue_RT").set((v) => Date.now() - v),
@@ -600,9 +604,9 @@ var trial = (label) => (row) => {
       .set((v) => Date.now()),
     newText("a1", row.answer1).cssContainer(answerCss),
     newText("a2", row.answer2).cssContainer(answerCss),
-    newCanvas("answers", 500, 120)
-      .add("left at 5%", 10, getText("a1"))
-      .add("left at 5%", 120, getText("a2"))
+    newCanvas("answers", 1500, 120)
+      .add("left at 5%", 50, getText("a1"))
+      .add("left at 5%", 160, getText("a2"))
       .print()
       .cssContainer(dialogCss),
     newSelector("comparison")

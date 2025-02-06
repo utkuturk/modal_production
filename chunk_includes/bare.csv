@@ -1,4 +1,4 @@
-/,Group,item,inference,answer,condition_name,condition,dialog1,dialog2,dialog3,answer1,answer2,
+Type,Group,item,inference,answer,condition_name,condition,dialog1,dialog2,dialog3,answer1,answer2,
 exp,A,1,i,Bare,iBare_1,detention,"In my son’s private school, students get detention for not wearing their tie.","Oh, my son goes to a private school, and I know he didn’t wear his tie today.","Well, if he didn’t wear his tie, ...",... he had detention.,... he must have had detention,
 exp,B,1,d,Bare,dBare_1,detention,"In my son’s private school, students get detention for not wearing their tie.","Oh, my son goes to the same school and I know he didn’t wear his tie this morning.","Well, if he didn’t wear his tie, ...",... he had detention.,... he must have had detention,
 exp,C,1,a,Bare,aBare_1,detention,I heard John broke the school dress code again.,"Oh, he missed practice after school today.","Well, if he wasn’t at practice, ...",... he had detention.,... he must have had detention,
