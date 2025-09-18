@@ -1,0 +1,15 @@
+* {
+	font-family: sans-serif, serif;
+}
+
+.bar-container {
+	border-radius: 3px;
+}
+
+div div.bar {
+	background-color: #13488b;
+}
+
+.Question-scale-box {
+	border-radius: 3px;
+}
