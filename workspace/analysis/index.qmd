@@ -1,0 +1,8 @@
+---
+title: "Analysis Home"
+listing:
+  contents: .
+  sort: "date desc"
+  filter-ui: true
+  type: table
+---

@@ -1,0 +1,15 @@
+project:
+  type: website
+  output-dir: docs  # <- local render target
+
+website:
+  title: "Analysis"
+  navbar:
+    left:
+      - text: Home
+        href: index.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true

@@ -1,0 +1,38 @@
+name: Deploy prebuilt analysis site
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'workspace/analysis/docs/**'
+      - '.github/workflows/deploy-analysis-prebuilt.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed to update gh-pages
+
+      - name: Verify site is prebuilt
+        run: |
+          test -f workspace/analysis/docs/index.html || {
+            echo "No index.html found. Run 'quarto render workspace/analysis' locally first.";
+            exit 1;
+          }
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: workspace/analysis/docs
+          publish_branch: gh-pages
+          # force_orphan keeps gh-pages history slim; remove if you prefer history
+          force_orphan: true
