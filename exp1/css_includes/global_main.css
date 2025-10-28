@@ -1,9 +1,13 @@
 body {
     color: black;
     background-color: white;
-    margin-left: 0;
+    margin-left: 0em;
     margin-top: 5em;
+    /*max-width: 1000px;*/
 }
+.highlight {
+    color: red;
+  }
 .box {
   box-sizing: border-box;
   width: 100%;

@@ -1,0 +1,1182 @@
+---
+title: "Explatory Data Analysis for 2ForcedChoice Modal Experiments"
+author: Utku and Sarah
+format:
+  html:
+    self-contained: true  # ensures everything is embedded, no extra folders
+    embed-resources: true
+    fig-width: 7
+    fig-height: 6
+    smooth-scroll: true
+    code-copy: true
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    number-sections: true
+    theme: flatly
+    highlight-style: a11y
+execute: 
+  error: false
+  echo: false
+  warning: false
+  message: false
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r}
+# setup and functions and packages
+
+# --- packages ---
+library(cowplot)
+library(tidyverse)
+library(magrittr)
+library(janitor)
+library(here)
+library(rlang)
+library(gt)
+library(htmltools)
+library(bslib)
+
+
+locate <- function(x, y) {
+  here::here("workspace", "data", paste0(x, "_", y, ".csv"))
+}
+
+# ========== 1) READ & CLEAN ==========
+read.pcibex <- function(
+  filepath,
+  auto.colnames = TRUE,
+  fun.col = function(col, cols) {
+    cols[cols == col] <- paste(col, "Ibex", sep = ".")
+    return(cols)
+  }
+) {
+  n.cols <- max(count.fields(filepath, sep = ",", quote = NULL), na.rm = TRUE)
+  if (auto.colnames) {
+    cols <- c()
+    con <- file(filepath, "r")
+    while (TRUE) {
+      line <- readLines(con, n = 1, warn = FALSE)
+      if (length(line) == 0) {
+        break
+      }
+      m <- regmatches(line, regexec("^# (\\d+)\\. (.+)\\.$", line))[[1]]
+      if (length(m) == 3) {
+        index <- as.numeric(m[2])
+        value <- m[3]
+        if (is.function(fun.col)) {
+          cols <- fun.col(value, cols)
+        }
+        cols[index] <- value
+        if (index == n.cols) {
+          break
+        }
+      }
+    }
+    close(con)
+    return(read.csv(
+      filepath,
+      comment.char = "#",
+      header = FALSE,
+      col.names = cols
+    ))
+  } else {
+    return(read.csv(
+      filepath,
+      comment.char = "#",
+      header = FALSE,
+      col.names = seq(1:n.cols)
+    ))
+  }
+}
+
+
+read_pcibex_clean <- function(path, use_reader = c("read.pcibex", "readr")) {
+  use_reader <- match.arg(use_reader)
+  df <- switch(
+    use_reader,
+    "read.pcibex" = read.pcibex(path),
+    "readr" = readr::read_csv(path, show_col_types = FALSE)
+  )
+  df %>%
+    janitor::clean_names() %>%
+    mutate(
+      id = paste0(results_reception_time, md5_hash_of_participant_s_ip_address),
+      # stable subject/item tags
+      id = as.character(id),
+      item = as.character(item),
+      subject = sprintf("S[%d]", as.integer(as.factor(id))),
+      item_num = sprintf("I[%d]", as.integer(as.factor(item)))
+    )
+}
+
+# ========== 2) SLICE TYPES & TIDY SELECTOR ANSWERS ==========
+# Helper: keep only Selector rows and pivot a1/a2 into one "answer" column
+tidy_selector_answers <- function(df) {
+  df %>%
+    filter(penn_element_type == "Selector") %>%
+    pivot_longer(
+      cols = c(a1, a2),
+      names_to = "choice",
+      values_to = "answer_text"
+    ) %>%
+    filter(value == choice) %>%
+    select(
+      subject,
+      item = item_num,
+      inference,
+      trial_number,
+      value,
+      answer_rt,
+      dialogue_rt,
+      answer = answer_text
+    )
+}
+
+split_types <- function(df) {
+  list(
+    exp = df %>% filter(type == "exp") %>% tidy_selector_answers(),
+    filler = df %>% filter(type == "filler") %>% tidy_selector_answers(),
+    check = df %>% filter(type == "check") %>% tidy_selector_answers()
+  )
+}
+
+# ========== 3) CHECK ACCURACY & QC ==========
+
+correct_answers <- c(
+  "... the metro <span class='highlight'>was</span> open. ",
+  "... she <span class='highlight'>won</span> the competition.",
+  "... he <span class='highlight'>failed</span> the test.",
+  "... the machine <span class='highlight'>is</span> on."
+)
+
+make_correct_variants <- function(x) {
+  plain <- gsub("</?span[^>]*>", "", x, perl = TRUE) # strip the <span> tags
+  unique(c(x, plain))
+}
+
+correct_answers_all <- make_correct_variants(correct_answers)
+
+normalize_for_compare <- function(x) {
+  x %>%
+    str_replace_all("</?span[^>]*>", "") %>%
+    str_replace_all("\\s+\\.", ".") %>%
+    str_squish()
+}
+
+check_accuracy_qc <- function(check_df, correct_answers, pass_thresh = 0.80) {
+  # build the full set (highlighted + plain)
+  correct_all <- make_correct_variants(correct_answers)
+  # normalize both sides once
+  norm_correct <- normalize_for_compare(correct_all)
+
+  check_tidy <- check_df %>%
+    mutate(
+      answer_norm = normalize_for_compare(answer),
+      correct = as.integer(answer_norm %in% norm_correct)
+    )
+
+  check_bins <- check_tidy %>%
+    group_by(subject) %>%
+    summarise(mean = mean(correct), .groups = "drop") %>%
+    mutate(
+      group = cut(
+        mean,
+        breaks = seq(0, 1, by = 0.1),
+        right = FALSE,
+        include.lowest = TRUE
+      )
+    ) %>%
+    count(group)
+
+  bad_subjects <- check_tidy %>%
+    group_by(subject) %>%
+    summarise(mean = mean(correct), .groups = "drop") %>%
+    filter(mean < pass_thresh) %>%
+    pull(subject)
+
+  list(
+    check_tidy = check_tidy,
+    check_bins = check_bins,
+    bad_subjects = bad_subjects
+  )
+}
+
+# ========== 4) TAG ANSWER TYPES ==========
+tag_answer_types <- function(df) {
+  # Case-insensitive, robust to minor variations
+  df %>%
+    mutate(
+      answer = as.character(answer),
+      is_haveto = str_detect(
+        answer,
+        regex("\\b(have|has) to\\b", ignore_case = TRUE)
+      ),
+      is_must = str_detect(answer, regex("\\bmust\\b", ignore_case = TRUE)),
+      is_prob = str_detect(answer, regex("\\bprobably\\b", ignore_case = TRUE)),
+      is_will = str_detect(
+        answer,
+        regex("\\bwill\\b|\\b’ll\\b|\\b'll\\b", ignore_case = TRUE)
+      ),
+      is_bare = !(is_haveto | is_must | is_prob | is_will)
+    )
+}
+
+add_modal_column <- function(df) {
+  df %>%
+    mutate(
+      modal = case_when(
+        is_haveto ~ "haveto",
+        is_must ~ "must",
+        is_prob ~ "prob",
+        is_will ~ "will",
+        is_bare ~ "bare"
+      )
+    )
+}
+
+# ========== 5) AVERAGES (PROPORTIONS + SE) ==========
+# By default, aggregate by inference; set by = c("inference","subject") etc. if you like.
+answer_props_long <- function(
+  df_tagged,
+  by = "inference",
+  cols = NULL,
+  alpha = 0.11
+) {
+  if (!is.character(by)) {
+    by <- as.character(by)
+  }
+  if (is.null(cols)) {
+    cols <- grep("^is_", names(df_tagged), value = TRUE)
+    if (length(cols) == 0) {
+      stop("No columns match '^is_'. Provide cols= explicitly.")
+    }
+  }
+
+  df_tagged %>%
+    pivot_longer(cols = all_of(cols), names_to = "type", values_to = "flag") %>%
+    mutate(
+      type = sub("^is_", "", type),
+      flag = suppressWarnings(as.numeric(flag))
+    ) %>%
+    group_by(across(all_of(by)), type) %>%
+    summarise(
+      n = sum(!is.na(flag)),
+      k = sum(flag, na.rm = TRUE),
+      mean = ifelse(n > 0, k / n, NA_real_),
+      # Clopper–Pearson exact CI via binom.test
+      lwr = ifelse(
+        n > 0,
+        binom.test(k, n, conf.level = 1 - alpha)$conf.int[1],
+        NA_real_
+      ),
+      upr = ifelse(
+        n > 0,
+        binom.test(k, n, conf.level = 1 - alpha)$conf.int[2],
+        NA_real_
+      ),
+      # OPTIONAL: a symmetric SE derived from the CP half-width (handy for geoms expecting 'se')
+      se = (upr - lwr) / (2 * qnorm(1 - alpha / 2)),
+      .groups = "drop"
+    )
+}
+
+# Wide CP summary (mirrors your original names) --------------------------------
+# Produces columns like: m_<type>, lwr_<type>, upr_<type>, and also n
+answer_props <- function(
+  df_tagged,
+  by = "inference",
+  cols = NULL,
+  alpha = 0.05
+) {
+  long <- answer_props_cp_long(df_tagged, by = by, cols = cols, alpha = alpha)
+
+  # Keep a single n per group (they're identical across types after summarise)
+  n_tbl <- long %>%
+    distinct(across(all_of(by)), n)
+
+  wide <- long %>%
+    mutate(
+      m = mean,
+      # keep lwr/upr names consistent
+      .keep = "used"
+    ) %>%
+    select(all_of(by), type, m = mean, lwr, upr, se) %>%
+    pivot_wider(
+      names_from = type,
+      values_from = c(m, lwr, upr, se),
+      names_glue = "{.value}_{type}"
+    )
+
+  n_tbl %>% left_join(wide, by = by)
+}
+
+# ========== DEMO ==========
+normalize_nulls <- function(x) {
+  x <- str_trim(x) # remove stray spaces
+  x[x %in% c("", "n/a", "N/A", "none", "None", "null", "NULL")] <- NA_character_
+  x
+}
+
+get_demo <- function(df) {
+  df %>%
+    filter(parameter == "Final") %>%
+    filter(penn_element_type == "TextInput") %>%
+    select(penn_element_name, value, subject) %>%
+    pivot_wider(
+      names_from = penn_element_name,
+      values_from = value
+    ) %>%
+    mutate(otherlg = normalize_nulls(otherlg)) %>%
+    mutate(age = as.integer(age))
+}
+
+
+# ========== 6) RESPONSE TIMES ==========
+answer_rt_summary <- function(
+  df_tagged,
+  by = "inference",
+  subject = "subject",
+  between = NULL
+) {
+  stopifnot(all(c(subject, "answer_rt") %in% names(df_tagged)))
+  if (!is.character(by)) {
+    by <- as.character(by)
+  }
+  if (!is.null(between) && !is.character(between)) {
+    between <- as.character(between)
+  }
+
+  df <- df_tagged %>%
+    mutate(answer_rt = suppressWarnings(as.numeric(answer_rt))) %>%
+    filter(!is.na(answer_rt))
+
+  # Build a pooling key for any between-subject factors
+  if (!is.null(between) && length(between) > 0) {
+    df <- df %>% unite("..POOL", all_of(between), sep = "\r", remove = FALSE)
+  } else {
+    df <- df %>% mutate(..POOL = "ALL")
+  }
+
+  # Key for "by" (within-subject) combinations
+  df <- df %>% unite("..BYKEY", all_of(by), sep = "\r", remove = FALSE)
+
+  # 1) Subject × condition means (work at subject-cell level, not trials)
+  subj_cell <- df %>%
+    group_by(across(all_of(c(subject, "..POOL", "..BYKEY", by)))) %>%
+    summarise(rt = mean(answer_rt), n_trials = dplyr::n(), .groups = "drop")
+
+  # 2) Grand mean within each pool (across subjects and within-subject conditions)
+  grand <- subj_cell %>%
+    group_by(..POOL) %>%
+    summarise(grand_mean = mean(rt), .groups = "drop")
+
+  # 3) Subject mean within each pool (across that subject's within-subject conditions)
+  subj_means <- subj_cell %>%
+    group_by(across(all_of(c(subject, "..POOL")))) %>%
+    summarise(subj_mean = mean(rt), .groups = "drop")
+
+  # 4) Normalize: rt_norm = rt - subject_mean + grand_mean
+  norm <- subj_cell %>%
+    left_join(subj_means, by = c(subject, "..POOL")) %>%
+    left_join(grand, by = "..POOL") %>%
+    mutate(rt_norm = rt - subj_mean + grand_mean)
+
+  # 5) Number of within-subject conditions per pool (k)
+  k_pool <- subj_cell %>%
+    group_by(..POOL) %>%
+    summarise(k = n_distinct(..BYKEY), .groups = "drop")
+
+  # 6) Final summary per condition (within each pool), with Morey correction
+  out <- norm %>%
+    group_by(across(all_of(c("..POOL", by)))) %>%
+    summarise(
+      n = n_distinct(.data[[subject]]), # subjects contributing
+      n_trials = sum(n_trials), # total trials (for reference)
+      m_rt = mean(rt), # mean of subject means (raw scale)
+      sd_norm = sd(rt_norm), # SD of normalized subject means
+      .groups = "drop"
+    ) %>%
+    left_join(k_pool, by = "..POOL") %>%
+    mutate(
+      correction = ifelse(k > 1, sqrt(k / (k - 1)), NA_real_),
+      se_rt = (sd_norm * correction) / sqrt(pmax(n, 1L))
+    ) %>%
+    select(all_of(by), any_of(between), n, n_trials, m_rt, se_rt) %>%
+    arrange(across(all_of(by)))
+
+  out
+}
+
+# ========== 7) PLOTTING HELPERS ==========
+plot_props_color <- function(props_long, keep_types = NULL, drop_zeros = TRUE) {
+  p <- props_long %>%
+    mutate(type = factor(type, levels = type_levels))
+
+  if (!is.null(keep_types)) {
+    p <- p %>% filter(type %in% keep_types)
+  }
+  if (drop_zeros) {
+    p <- p %>%
+      group_by(type) %>%
+      filter(any(replace_na(mean, 0) > 0)) %>%
+      ungroup()
+  }
+
+  ggplot(p, aes(inference, mean, color = type, group = type)) +
+    # geom_line(alpha = 0.7, position = position_dodge(0.3)) +
+    geom_point(position = position_dodge(0.3)) +
+    geom_errorbar(
+      aes(ymin = lwr, ymax = upr),
+      width = 0.15,
+      position = position_dodge(0.3)
+    ) +
+    scale_y_continuous(limits = c(0, 1)) +
+    scale_color_manual(
+      values = cb_palette,
+      limits = type_levels,
+      breaks = type_levels,
+      drop = FALSE
+    ) + # << keep levels even if absent
+    labs(y = "Proportion", color = "Type") +
+    theme_minimal(base_size = 12)
+}
+
+plot_rt <- function(
+  rt_df,
+  x = "inference",
+  group = "modal",
+  keep_types = NULL
+) {
+  p <- rt_df %>%
+    mutate(modal = factor(modal, levels = type_levels))
+
+  if (!is.null(keep_types)) {
+    p <- p %>% filter(modal %in% keep_types)
+  }
+
+  ggplot(
+    p,
+    aes_string(x = x, y = "m_rt", color = group, group = group, shape = group)
+  ) +
+    geom_point(position = position_dodge(0.2), size = 2) +
+    geom_errorbar(
+      aes(ymin = m_rt - 1.96 * se_rt, ymax = m_rt + 1.96 * se_rt),
+      width = 0.15,
+      linewidth = 0.5,
+      position = position_dodge(0.2)
+    ) +
+    geom_errorbar(
+      aes(ymin = m_rt - se_rt, ymax = m_rt + se_rt),
+      width = 0,
+      linewidth = 1,
+      position = position_dodge(0.2)
+    ) +
+    scale_color_manual(
+      values = cb_palette,
+      limits = type_levels,
+      breaks = type_levels,
+      drop = FALSE
+    ) + # << keep levels even if absent
+    labs(y = "Mean RT (ms)") +
+    theme_minimal()
+}
+
+
+# ========== 8) END-TO-END FOR ONE FILE ==========
+# Returns a list you can pick from.
+process_one_pcibex <- function(
+  csv_path,
+  correct_answers,
+  reader = c("read.pcibex", "readr"),
+  qc_threshold = 0.80
+) {
+  reader <- match.arg(reader)
+  df <- read_pcibex_clean(csv_path, use_reader = reader)
+
+  parts <- split_types(df)
+  chk <- check_accuracy_qc(
+    parts$check,
+    correct_answers,
+    pass_thresh = qc_threshold
+  )
+
+  exp_tidy <- parts$exp %>%
+    filter(!subject %in% chk$bad_subjects) %>%
+    tag_answer_types() %>%
+    add_modal_column()
+  filler_tidy <- parts$filler %>%
+    filter(!subject %in% chk$bad_subjects) %>%
+    tag_answer_types() %>%
+    add_modal_column()
+
+  list(
+    check_tidy = chk$check_tidy,
+    check_bins = chk$check_bins,
+    bad_subjects = chk$bad_subjects,
+    demo = get_demo(df),
+    exp_tidy = exp_tidy,
+    filler_tidy = filler_tidy,
+    exp_props = answer_props_long(exp_tidy, by = "inference"),
+    filler_props = answer_props_long(filler_tidy, by = "inference"),
+    exp_rt = answer_rt_summary(exp_tidy, by = c("inference", "modal")),
+    filler_rt = answer_rt_summary(filler_tidy, by = c("inference", "modal"))
+  )
+}
+
+
+```
+
+
+## Procedure for both experiments
+
+
+- Platform and environment
+  - The experiments were conducted online in PCIbex (PennController for Ibex). The interface switched to fullscreen at the start of the main task and exited fullscreen at the end.
+  - Participants were instructed to use a desktop or laptop with Google Chrome, a keyboard, and a mouse or trackpad in a distraction-free setting.
+  - Total session time was approximately 25 minutes.
+
+- Consent and demographics
+  - After an introduction screen, participants viewed and downloaded a consent form and indicated consent to proceed.
+  - A brief demographics form collected age, gender, location (state and country), computer type, native language, and other languages.
+
+- Design and counterbalancing
+  - Aim: the experiments tested the interpretive force of must compared to other modal elements, or the absence of a modal.
+  - Participants were randomly assigned (between subjects) to one of four answer sets: bare, have to, will, prob (a separate CSV file per set).
+  - Experimental, filler, and attention-check trials were fully intermixed and randomized for each participant.
+  - On critical trials, the modal from a participant’s assigned set was contrasted with must (for example, will vs. must).
+  - Filler trials featured the remaining modal options among the two responses.
+  - Attention-check trials consisted of unambiguous deductive contexts to verify attention.
+  - Counts: experimental items = X; fillers = X; attention checks = X.
+  - Exclusion criterion: participants were excluded if they failed more than 20% of attention-check trials.
+  - Each experimental item appeared in one of three context conditions: abductive, deductive, or inference.
+  - Context conditions were assigned using a Latin square, so each participant saw exactly one context per item.
+  - On every trial, the two response options were order-randomized.
+  - Between-experiment differences:
+    - Experiment 1 used SONA participants and included preambles that conveyed contextual information in an if-clause.
+    - Experiment 2 used Prolific participants and included a shorter preamble consisting only of a well, then... phrase.
+
+- Instructions and practice
+  - Participants read step-by-step instructions with two worked examples (one obvious and one less obvious).
+  - Additional practice trials followed, using the same two-stage flow as the main task.
+
+- Trial structure (main task)
+  - Context presentation: participants saw a short, three-turn conversation (Speaker A – Speaker B – Speaker A) that provided the relevant context.
+  - Dialogue (reading) phase: participants pressed the space bar to advance or were auto-advanced after 120 s. A Dialogue RT (ms) was recorded from dialogue onset to advance.
+  - Choice phase: two candidate sentence completions appeared simultaneously. Participants selected the option they judged most appropriate; a 60 s timeout applied. An Answer RT (ms) was recorded from option onset to response.
+  - After the response, the screen cleared and the next trial began.
+
+- Breaks
+  - Brief on-screen breaks were inserted at regular intervals (about every four trials). Participants resumed by pressing the space bar.
+
+- Measures and logging
+  - For each trial, the following were logged: item and condition labels (Type, Group, Item, Inference, ConditionName, Condition), the three dialogue lines (D1–D3), both options (A1–A2), the selected answer, Dialogue RT, Answer RT, and TrialNumber.
+  - Practice trials were logged with the same structure and marked as practice.
+
+- Debrief and redirect
+  - Upon completion, results were submitted to the server, fullscreen ended, and participants were automatically redirected to a debrief and credit form hosted at UMD.
+
+
+
+## Experiment 1
+
+
+```{r}
+
+read_exp1 <- function(x, offset = 0) {
+  read.pcibex(locate("exp1", x)) %>%
+    janitor::clean_names() %>%
+    mutate(
+      id = paste0(results_reception_time, md5_hash_of_participant_s_ip_address),
+      # ensure stable subject/item tags
+      id = as.character(id),
+      item = as.character(item),
+      subject = sprintf("S[%d]", as.integer(as.factor(id)) + offset),
+      item_num = sprintf("I[%d]", as.integer(as.factor(item)))
+    )
+}
+
+assign_modals <- function(df, env = parent.frame()) {
+  pairs <- df %>%
+    dplyr::select(subject, answer) %>%
+    dplyr::filter(answer %in% c("Prob", "Bare", "Will", "haveto")) %>%
+    dplyr::distinct()
+
+  prob_df <- df %>%
+    dplyr::filter(subject %in% pairs$subject[pairs$answer == "Prob"])
+  bare_df <- df %>%
+    dplyr::filter(subject %in% pairs$subject[pairs$answer == "Bare"])
+  will_df <- df %>%
+    dplyr::filter(subject %in% pairs$subject[pairs$answer == "Will"])
+  haveto_df <- df %>%
+    dplyr::filter(subject %in% pairs$subject[pairs$answer == "haveto"])
+
+  assign("exp1_prob", prob_df, envir = env)
+  assign("exp1_bare", bare_df, envir = env)
+  assign("exp1_will", will_df, envir = env)
+  assign("exp1_haveto", haveto_df, envir = env)
+  invisible(NULL)
+}
+
+process_modal_one <- function(
+  correct_answers,
+  df,
+  qc_threshold = 0.80
+) {
+  parts <- split_types(df)
+  chk <- check_accuracy_qc(
+    parts$check,
+    correct_answers,
+    pass_thresh = qc_threshold
+  )
+
+  exp_tidy <- parts$exp %>%
+    filter(!subject %in% chk$bad_subjects) %>%
+    tag_answer_types() %>%
+    add_modal_column()
+  filler_tidy <- parts$filler %>%
+    filter(!subject %in% chk$bad_subjects) %>%
+    tag_answer_types() %>%
+    add_modal_column()
+
+  list(
+    check_tidy = chk$check_tidy,
+    check_bins = chk$check_bins,
+    bad_subjects = chk$bad_subjects,
+    demo = get_demo(df),
+    exp_tidy = exp_tidy,
+    filler_tidy = filler_tidy,
+    exp_props = answer_props_long(exp_tidy, by = "inference"),
+    filler_props = answer_props_long(filler_tidy, by = "inference"),
+    exp_rt = answer_rt_summary(exp_tidy, by = c("inference", "modal")),
+    filler_rt = answer_rt_summary(filler_tidy, by = c("inference", "modal"))
+  )
+}
+
+# Map your 'trial' to the 'type' that split_types() expects.
+# If you truly have no fillers/checks, leave everything as "exp".
+
+exp1_color <- read_exp1("color", offset = 50)
+exp1_colorless <- read_exp1("colorless")
+exp1 <- bind_rows(exp1_color, exp1_colorless)
+
+alexander <- "S[2]"
+non_natives <- c("S[33]", "S[4]", "S[23]", "S[29]", "S[36]")
+exp1 <- exp1 %>%
+  filter(!subject %in% alexander) %>%
+  filter(!subject %in% non_natives)
+assign_modals(exp1)
+
+correct_answers <- c(
+  "... the metro <span class='highlight'>was</span> open. ",
+  "... she <span class='highlight'>won</span> the competition.",
+  "... he <span class='highlight'>failed</span> the test.",
+  "... the machine <span class='highlight'>is</span> on."
+)
+
+
+exp1_haveto <- process_modal_one(correct_answers, exp1_haveto)
+exp1_prob <- process_modal_one(correct_answers, exp1_prob)
+exp1_will <- process_modal_one(correct_answers, exp1_will)
+exp1_bare <- process_modal_one(correct_answers, exp1_bare)
+
+
+exp1 <- list(
+  prob = exp1_prob,
+  will = exp1_will,
+  haveto = exp1_haveto,
+  bare = exp1_bare
+)
+
+
+```
+
+
+
+
+### Participant Accuracy in Check Items
+
+```{r}
+
+.build_check_bins_table <- function(x) {
+  tag <- x$exp_props %>%
+    filter(mean != 0) %>%
+    distinct(type) %>%
+    mutate(pair = paste0(type, " vs. ", dplyr::lead(type))) %>%
+    pull(pair) %>%
+    .[1]
+  if (is.na(tag) || !nzchar(tag)) {
+    tag <- "Comparison"
+  }
+
+  total_n <- sum(x$check_bins$n, na.rm = TRUE)
+
+  x$check_bins %>%
+    rename(Bin = group, Count = n) %>%
+    gt() %>%
+    tab_header(title = tag, subtitle = paste0("Total N = ", total_n)) %>%
+    cols_align("center", columns = "Bin") %>%
+    cols_align("right", columns = "Count") %>%
+    tab_options(table.font.size = gt::px(13), data_row.padding = gt::px(4))
+}
+
+render_check_bins_side_by_side <- function(
+  exp_list,
+  columns = 2,
+  min_width = 260
+) {
+  width_pct <- 100 / columns
+  tables <- map(exp_list, .build_check_bins_table)
+
+  cards <- map(
+    tables,
+    ~ div(
+      class = "gt-card",
+      style = sprintf(
+        "flex:1 0 calc(%s%% - 12px); min-width:%dpx;",
+        width_pct,
+        as.integer(min_width)
+      ),
+      HTML(gt::as_raw_html(.x, inline_css = TRUE))
+    )
+  )
+
+  # Use tagList() to splice children without needing rlang/!!!
+  div(
+    style = "display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; width:100%;",
+    tagList(cards)
+  )
+}
+
+render_check_bins_side_by_side(exp1, columns = 4)
+
+```
+
+<details>
+<summary>Click to expand Demographics</summary>
+
+```{r}
+#| panel: tabset
+#| output: asis
+
+# vectorized cleaner for the `geo` column
+clean_geo <- function(x) {
+  x <- as.character(x)
+  x <- ifelse(is.na(x), NA_character_, utils::URLdecode(x)) # "%2C" -> ","
+  x <- gsub(",\\s*", ", ", x, perl = TRUE) # ensure ", "
+  trimws(x)
+}
+
+get_tag <- function(exp) {
+  tag <- exp$exp_props %>%
+    filter(mean != 0) %>%
+    distinct(type) %>%
+    mutate(pair = paste0(type, " vs. ", dplyr::lead(type))) %>%
+    pull(pair) %>%
+    .[1]
+  if (is.na(tag) || !nzchar(tag)) "Comparison" else tag
+}
+
+build_demo_gt <- function(exp) {
+  exp$demo %>%
+    mutate(geo = clean_geo(geo), otherlg = clean_geo(otherlg)) %>% # <- vectorized; no if_else needed
+    gt() %>%
+    fmt_missing(columns = everything(), missing_text = "") %>%
+    cols_label(
+      subject = "Subject",
+      age = "Age",
+      gender = "Gender",
+      geo = "Location",
+      comp = "Computer",
+      language = "Language",
+      otherlg = "Other language"
+    ) %>%
+    tab_options(
+      table.width = gt::pct(100),
+      table.font.size = gt::px(12),
+      column_labels.font.size = gt::px(12),
+      data_row.padding = gt::px(4)
+    )
+}
+
+# Pick your list:
+exp_list <- exp1 # or exp1
+
+for (i in seq_along(exp_list)) {
+  exp <- exp_list[[i]]
+  tag <- get_tag(exp)
+
+  ages <- exp$demo$age
+  age_txt <- sprintf(
+    "Mean Age: %.2f (%d–%d)",
+    round(mean(ages, na.rm = TRUE), 2),
+    min(ages, na.rm = TRUE),
+    max(ages, na.rm = TRUE)
+  )
+
+  # Quarto tab title (one tab per iteration)
+  cat(sprintf("\n## %s\n\n", tag))
+  # Small subtitle line
+  cat(sprintf("_%s_\n\n", age_txt))
+
+  # Emit the gt table as inline HTML so it renders inside the tab
+  tbl <- build_demo_gt(exp)
+  cat(gt::as_raw_html(tbl, inline_css = TRUE))
+  cat("\n")
+}
+```
+</details>
+
+### Answer Choice Summary
+
+```{r}
+cb_palette <- c(
+  must = "#0072B2",
+  prob = "#009E73",
+  will = "#56B4E9",
+  haveto = "#E69F00",
+  bare = "#CC79A7"
+)
+
+type_levels <- names(cb_palette)
+
+
+p1 <- plot_props_color(exp1$prob$exp_props, keep_types = c("must", "prob")) +
+  ggtitle("Prob")
+p2 <- plot_props_color(exp1$will$exp_props, keep_types = c("must", "will")) +
+  ggtitle("Will")
+p3 <- plot_props_color(
+  exp1$haveto$exp_props,
+  keep_types = c("must", "haveto")
+) +
+  ggtitle("Have to")
+p4 <- plot_props_color(exp1$bare$exp_props, keep_types = c("must", "bare")) +
+  ggtitle("Bare")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+grid <- plot_grid(
+  p1 + theme(legend.position = "none"),
+  p2 + theme(legend.position = "none"),
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```
+
+
+### Reading Times Summary
+
+
+```{r}
+
+p1 <- plot_rt(exp1$prob$exp_rt, keep_types = c("must", "prob")) +
+  ggtitle("Prob")
+p2 <- plot_rt(exp1$will$exp_rt, keep_types = c("must", "will")) +
+  ggtitle("Will")
+p3 <- plot_rt(exp1$haveto$exp_rt, keep_types = c("must", "haveto")) +
+  ggtitle("Have to")
+p4 <- plot_rt(exp1$bare$exp_rt, keep_types = c("must", "bare")) +
+  ggtitle("Bare")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+grid <- plot_grid(
+  p1 + theme(legend.position = "none"),
+  p2 + theme(legend.position = "none"),
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```
+
+
+## Experiment 2
+
+
+
+```{r}
+correct_answers <- c(
+  "... the metro <span class='highlight'>was</span> open. ",
+  "... she <span class='highlight'>won</span> the competition.",
+  "... he <span class='highlight'>failed</span> the test.",
+  "... the machine <span class='highlight'>is</span> on."
+)
+
+cb_palette <- c(
+  must = "#0072B2",
+  prob = "#009E73",
+  will = "#56B4E9",
+  haveto = "#E69F00",
+  bare = "#CC79A7"
+)
+type_levels <- names(cb_palette)
+
+
+# One dataset at a time
+res_prob <- process_one_pcibex(locate("exp2", "prob_clean"), correct_answers, reader = "readr")
+res_will <- process_one_pcibex(locate("exp2", "will_clean"), correct_answers, reader = "readr")
+res_haveto <- process_one_pcibex(locate("exp2", "haveto_clean"), correct_answers, reader = "readr")
+res_bare <- process_one_pcibex(locate("exp2", "bare_clean"), correct_answers, reader = "readr")
+
+exp2 <- list(
+  prob = res_prob,
+  will = res_will,
+  haveto = res_haveto,
+  bare = res_bare
+)
+```
+
+### Participant Accuracy in Check Items
+
+```{r}
+render_check_bins_side_by_side(exp2, columns = 4)
+
+```
+
+
+<details>
+<summary>Click to expand Demographics</summary>
+
+```{r}
+#| panel: tabset
+#| output: asis
+
+exp_list <- exp2 # or exp1
+
+for (i in seq_along(exp_list)) {
+  exp <- exp_list[[i]]
+  tag <- get_tag(exp)
+
+  ages <- exp$demo$age
+  age_txt <- sprintf(
+    "Mean Age: %.2f (%d–%d)",
+    round(mean(ages, na.rm = TRUE), 2),
+    min(ages, na.rm = TRUE),
+    max(ages, na.rm = TRUE)
+  )
+
+  # Quarto tab title (one tab per iteration)
+  cat(sprintf("\n## %s\n\n", tag))
+  # Small subtitle line
+  cat(sprintf("_%s_\n\n", age_txt))
+
+  # Emit the gt table as inline HTML so it renders inside the tab
+  tbl <- build_demo_gt(exp)
+  cat(gt::as_raw_html(tbl, inline_css = TRUE))
+  cat("\n")
+}
+
+```
+
+</details>
+
+### Answer Choice Summary
+
+```{r}
+
+p1 <- plot_props_color(exp2$prob$exp_props, keep_types = c("must", "prob")) +
+  ggtitle("Prob")
+p2 <- plot_props_color(exp2$will$exp_props, keep_types = c("must", "will")) +
+  ggtitle("Will")
+p3 <- plot_props_color(
+  exp2$haveto$exp_props,
+  keep_types = c("must", "haveto")
+) +
+  ggtitle("Have to")
+p4 <- plot_props_color(exp2$bare$exp_props, keep_types = c("must", "bare")) +
+  ggtitle("Bare")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+grid <- plot_grid(
+  p1 + theme(legend.position = "none"),
+  p2 + theme(legend.position = "none"),
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```
+
+
+
+### Reading Times Summary
+
+```{r}
+# plot_rt(exp2$prob$exp_rt)
+# plot_rt(res_will$exp_rt)
+# plot_rt(res_haveto$exp_rt)
+# plot_rt(res_bare$exp_rt)
+
+p1 <- plot_rt(exp2$prob$exp_rt, keep_types = c("must", "prob")) +
+  ggtitle("Prob")
+p2 <- plot_rt(exp2$will$exp_rt, keep_types = c("must", "will")) +
+  ggtitle("Will")
+p3 <- plot_rt(exp2$haveto$exp_rt, keep_types = c("must", "haveto")) +
+  ggtitle("Have to")
+p4 <- plot_rt(exp2$bare$exp_rt, keep_types = c("must", "bare")) +
+  ggtitle("Bare")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+grid <- plot_grid(
+  p1 + theme(legend.position = "none"),
+  p2 + theme(legend.position = "none"),
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```

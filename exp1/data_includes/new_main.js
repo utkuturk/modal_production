@@ -3,17 +3,16 @@ DebugOff(); // turn off debugger
 SetCounter("setcounter");
 // Items put in Oct1
 //Randomly assign the participant to one of the four answer conditions
-const answerConditions = ["will","bare","prob","haveto"];
+const answerConditions = ["will", "prob", "haveto", "bare"];
 var answerCondition = answerConditions[Math.floor(Math.random() * 4)];
 // Transform answerCondition to a text that can be used in the filter function
 var answerConditionText = answerConditions[answerCondition];
-
-const prolificcode = "";
+var debrief_link = "https://umdsurvey.umd.edu/jfe/form/SV_0ohhNodtn3awXJA";
 
 // Header for the CSV file
 Header(
   // newVar("subject").global,
-  newVar("id").global(), // This is for Prolific
+  // newVar("id").global(), // This is for Prolific
   newVar("Type").global(),
   newVar("Group").global(),
   newVar("Item").global(),
@@ -31,7 +30,7 @@ Header(
   newVar("TrialNumber").global()
 )
   // .log("subject", s)
-  .log("id", GetURLParameter("id")) // This is for Prolific
+  // .log("id", GetURLParameter("id")) // This is for Prolific
   .log("Type", getVar("Type"))
   .log("Group", getVar("Group"))
   .log("Item", getVar("Item"))
@@ -58,8 +57,7 @@ Sequence(
   "exp-start",
   sepWithN("break", rshuffle("trial", "filler", "check"), 4),
   "send_results",
-  "bye1",
-  "bye2"
+  "debrief"
 );
 
 //for inserting breaks
@@ -128,14 +126,12 @@ var pageCss = {
 };
 
 var textCss = {
-  "text-align": "center",
+  // "text-align": "center",
   margin: "0 auto",
   "font-size": dialogFontSize,
   "font-family": "sans-serif",
   // "width": "50em"
 };
-
-
 
 const speakerpageCss = {
   "font-family": "sans-serif",
@@ -214,14 +210,14 @@ newTrial(
   newText(
     "welcome-body",
     "<center><b>Welcome!</b></center>" +
-      "<p>This experiment requires your FULL ATTENTION. " +
+      "<p>This experiment requires your full attention. " +
       "The experiment is reasonably brief. Most people find that the study takes around 25 minutes. " +
       "During this time, you must give your complete attention." +
       "<p>Before proceeding please make sure:<ol>" +
       "<li>You are using your <b>computer</b>, and not your phone or tablet,</li>" +
       "<li>You are using <b>Google Chrome</b>, and not Safari or Firefox,</li>" +
       "<li>You have a <b>working mouse/trackpad and keyboard</b>,</li>" +
-      "<li>You are a native speaker of <b>American English</b>,</li>" +
+      // "<li>You are a native speaker of <b>American English</b>,</li>" +
       "<li>You are <b>older than 18</b> years old,</li>" +
       "<li>This is your <b>first time doing this experiment</b>,</li></ol>"
   ).css(textCss),
@@ -240,7 +236,9 @@ newTrial(
   newText(
     "consent-body",
     "<center><b>Consent Form</b></center>" +
-      "<p>Please click <a target='_blank' rel='noopener noreferrer' href='irb.pdf'> here</a> to download the consent form for this study. If you read it and agree to participate in this study, click 'I Agree' below. If you do not agree to participate in this study, you can leave this study by closing the tab. You can leave the experiment at any time by closing the tab during the experiment. If you leave the experiment before completion of both parts, you will not be compensated for your time. If you encounter any problems, do not hesitate to reach us either via " +
+      "<p>Please click <a target='_blank' rel='noopener noreferrer' href='irb.pdf'> here</a> to download the consent form for this study. If you read it and agree to participate in this study, click 'I Agree' below. If you do not agree to participate in this study, you can leave this study by closing the tab. You can leave the experiment at any time by closing the tab during the experiment. If you leave the experiment before" +
+      "completing the experiment, " +
+      "you will not be compensated for your time. If you encounter any problems, do not hesitate to reach us either via " +
       // "Prolific or e-mail." +
       "email. " +
       "<br><br><b> Researchers:</b> <br>Sarah Boukendour<sup>*</sup> <i> (sboukend@umd.edu)</i>, Utku Turk<sup>*</sup>, Alexander Williams<sup>*</sup>, Dan Goodhue<sup>&dagger;</sup>, Valentine Hacquard<sup>*</sup> <br><sup>*</sup> University of Maryland, Department of Linguistics <br> <sup>&dagger;</sup>  Leibniz-Centre for General Linguistics (ZAS), Berlin, Germany"
@@ -379,9 +377,9 @@ newTrial(
   "inst-1",
   newText(
     "inst-1a-body",
-    " <p>Please read this instruction carefully! </p>" +
-      "<p>In each trial in this experiment, you will see dialogues like the one on the next page. Your task is to read the dialogue carefully and choose the best completion.</p>" +
-      "<p>You’ll be presented with the dialogue first. <b>You will have 15 seconds to read the dialogue.</b></p>"
+    " <p>Please read the instructions carefully! </p>" +
+      "<p> In each trial, you will see a snippet of a dialogue, as if you are overhearing part of a conversation. Your task is to choose the most appropriate way to complete the speaker’s statement.</p>" +
+      "<p>First, you will see the dialogue on its own. Then, you will be presented with a selection of possible completions to choose from.</p>"
   ).css(textCss),
   newText(
     "inst-1b-body",
@@ -397,7 +395,7 @@ newTrial(
       "<div class='box'>Please pick your answers intuitively—these are not trick questions. Follow your gut instinct and go with the first answer that comes to mind. Try not to overthink it. </div>" +
       "<p>Let’s go through an example. Some examples you encounter during the experiment might feel obvious to you..."
   ),
-  newCanvas("inst-1-page", 1500, 400)
+  newCanvas("inst-1-page", 1500, 450)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
     .add(0, 120, getText("inst-1a-body"))
     .cssContainer(pageCss)
@@ -419,7 +417,6 @@ newTrial(
   newSelector().add(getButton("c3")).keys(" ").wait()
 );
 
-
 var trial_inst = (label) => (row) => {
   return newTrial(
     label,
@@ -433,9 +430,9 @@ var trial_inst = (label) => (row) => {
     newText("sA1", "<b>Speaker A:</b> "),
     newText("sA2", "<b>Speaker B:</b> "),
     newText("sA3", "<b>Speaker A:</b> "),
-    newText("dia1", row.dialog1 ),
-    newText("dia2", row.dialog2 ),
-    newText("dia3", row.dialog3 ),
+    newText("dia1", row.dialog1),
+    newText("dia2", row.dialog2),
+    newText("dia3", row.dialog3),
     newTimer("dialogue_timeout", dialogue_timeout).start(),
     newVar("dialogue_RT")
       .global()
@@ -514,7 +511,9 @@ newTrial(
   "inst-4",
   newText(
     "Others may not feel so obvious to you, but you’ll still need to choose what you feel is the best option out of the two provided."
-  ).css(textCss).print(),
+  )
+    .css(textCss)
+    .print(),
   newText("<p>").print(),
   newButton("see", "See an example").bold().css(buttonCss).print(),
   newSelector().add(getButton("see")).keys(" ").wait()
@@ -529,7 +528,9 @@ Template(
 //   "inst-6",
 //   newText(
 //     "Got it? Now let’s move on to a few more practice items to help you adjust to the task."
-//   ).css(textCss).print(),
+//   )
+//     .css(textCss)
+//     .print(),
 //   newText("<p>").print(),
 //   newButton("see", "See an example").bold().css(buttonCss).print(),
 //   newSelector().add(getButton("see")).keys(" ").wait()
@@ -547,7 +548,7 @@ newTrial(
     "inst-4-body",
     "<p>When you are ready, please turn off any distractions " +
       "such as music, television, or your cell phone for the duration of the experiment, " +
-      "and click below to continue to the familiarization section. Thank you!"
+      "and click below to start the experiment. Thank you!"
   ).css(textCss),
   newCanvas("inst-4-page", 1500, 300)
     .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
@@ -660,38 +661,34 @@ Template(GetTable(fname).filter("Type", "check"), trial("check"));
 // END OF EXPERIMENT!!!
 SendResults("send_results");
 
-newTrial(
-  "bye1",
-  newText(
-    "<p>This is the end of the experiment.Thank you for participating! " +
-      "<p>Click 'See the Code' button to receive a PROLIFIC code."
-  )
-    .center()
-    .print(),
-  newButton("See the Code")
-    .center()
-    .settings.css("margin", "40px")
-    .print()
-    .wait()
-);
+
 
 newTrial(
-  "bye2",
-  newText("confirmation", "Thank you for participating in our study!")
-    .center()
-    .print(),
-  newText(".   ") // Adding space for formatting
-    .print()
-    .color("white"),
+  "debrief",
+  exitFullscreen(),
   newText(
-    "The experiment code is " +  prolificcode + " ." +
-      "Please paste this value into Prolific." +
-      "<p>You can also confirm your participation on Prolific by clicking the link below: " +
-      "<a href='https://app.prolific.com/submissions/complete?cc=" +  prolificcode + "'>Confirm your participation.</a>" +
-      "<p>When you are finished, you may close this tab."
-  )
-    .center()
-    .bold()
+    "exit-text-ling",
+    "<center><b>Thank you for participating in our study!</b></center><br><br>" +
+      "<p>Please click the 'END' button below." +
+      "<p>It will redirect you to a simple Form to explain you the experimental details and ask you some questions." +
+      "<p>It will also ask you for your name and student ID, so that we can grant you the credit on SONA."
+  ).css(textCss),
+  newCanvas("exit-page-ling", 1500, 450)
+    .add(100, 20, newImage("umd_ling.png").size("60%", "auto"))
+    .add(0, 120, getText("exit-text-ling"))
+    .cssContainer(pageCss)
     .print(),
-  newTimer("infinite", 1000).wait()
+  newButton("   END   ").bold().css(buttonCss).print().wait(),
+  getText("exit-text-ling").remove(),
+  getCanvas("exit-page-ling").remove(),
+  newHtml(
+    "ling_debrief",
+    "<!DOCTYPE html><meta http-equiv='refresh' content='0; url=" +
+      debrief_link +
+      "'>The experiment has ended and your answers are sent to the server.<br />If you want to get a credit for a class, <a href = '" +
+      debrief_link +
+      "'>click this link</a> and follow instructions."
+  )
+    .print()
+    .wait()
 );
