@@ -5,7 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'workspace/analysis/docs/**'
-      - '.github/workflows/deploy-analysis-prebuilt.yml'
+      - '.github/workflows/publish-analysis.yml'
   workflow_dispatch:
 
 jobs:
