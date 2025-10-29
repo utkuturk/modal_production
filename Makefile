@@ -3,5 +3,5 @@ render-analysis:
 
 publish-analysis: render-analysis
 	git add workspace/analysis/docs
-	git commit -m "Publish analysis site"
+	git commit -m "Publish analysis site" || true
 	git push

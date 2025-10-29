@@ -5,26 +5,25 @@ on:
     branches: [ main ]
     paths:
       - 'workspace/analysis/docs/**'
-      - '.github/workflows/publish-analysis.yml'
+      - '.github/workflows/deploy-analysis-prebuilt.yml'
   workflow_dispatch:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pages: write
-      id-token: write
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # needed to update gh-pages
+          fetch-depth: 0
 
-      - name: Verify site is prebuilt
+      - name: Ensure site exists
         run: |
           test -f workspace/analysis/docs/index.html || {
-            echo "No index.html found. Run 'quarto render workspace/analysis' locally first.";
+            echo "No prebuilt site found. Run 'quarto render workspace/analysis' locally and commit the docs/ folder.";
             exit 1;
           }
 
@@ -32,7 +31,9 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: workspace/analysis/docs
           publish_branch: gh-pages
-          # force_orphan keeps gh-pages history slim; remove if you prefer history
-          force_orphan: true
+          publish_dir: workspace/analysis/docs
+          force_orphan: true      # keep gh-pages history slim (remove to preserve history)
+          # optional:
+          # user_name: "github-actions[bot]"
+          # user_email: "41898282+github-actions[bot]@users.noreply.github.com"
