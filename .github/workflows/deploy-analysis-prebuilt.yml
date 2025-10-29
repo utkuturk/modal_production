@@ -1,0 +1,39 @@
+name: Deploy prebuilt analysis site
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'workspace/analysis/docs/**'
+      - '.github/workflows/deploy-analysis-prebuilt.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure site exists
+        run: |
+          test -f workspace/analysis/docs/index.html || {
+            echo "No prebuilt site found. Run 'quarto render workspace/analysis' locally and commit the docs/ folder.";
+            exit 1;
+          }
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: workspace/analysis/docs
+          force_orphan: true      # keep gh-pages history slim (remove to preserve history)
+          # optional:
+          # user_name: "github-actions[bot]"
+          # user_email: "41898282+github-actions[bot]@users.noreply.github.com"
