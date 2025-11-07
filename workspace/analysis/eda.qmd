@@ -5,8 +5,8 @@ format:
   html:
     self-contained: true  # ensures everything is embedded, no extra folders
     embed-resources: true
-    fig-width: 7
-    fig-height: 6
+    fig-width: 10
+    fig-height: 10
     smooth-scroll: true
     code-copy: true
     code-fold: true
@@ -208,9 +208,9 @@ check_accuracy_qc <- function(check_df, correct_answers, pass_thresh = 0.80) {
 }
 
 # ========== 4) TAG ANSWER TYPES ==========
-tag_answer_types <- function(df) {
-  # Case-insensitive, robust to minor variations
-  df %>%
+tag_answer_types <- function(df, bare = T) {
+  if (bare) {
+    df %>%
     mutate(
       answer = as.character(answer),
       is_haveto = str_detect(
@@ -225,10 +225,28 @@ tag_answer_types <- function(df) {
       ),
       is_bare = !(is_haveto | is_must | is_prob | is_will)
     )
+  } else {
+    df %>%
+    mutate(
+      answer = as.character(answer),
+      is_haveto = str_detect(
+        answer,
+        regex("\\b(have|has) to\\b", ignore_case = TRUE)
+      ),
+      is_must = str_detect(answer, regex("\\bmust\\b", ignore_case = TRUE)),
+      is_prob = str_detect(answer, regex("\\bprobably\\b", ignore_case = TRUE)),
+      is_will = str_detect(
+        answer,
+        regex("\\bwill\\b|\\b’ll\\b|\\b'll\\b", ignore_case = TRUE)
+      ),
+      is_gotta = !(is_haveto | is_must | is_prob | is_will)
+    )
+  }
 }
 
-add_modal_column <- function(df) {
-  df %>%
+add_modal_column <- function(df, bare = T) {
+  if (bare) {
+    df %>%
     mutate(
       modal = case_when(
         is_haveto ~ "haveto",
@@ -238,19 +256,32 @@ add_modal_column <- function(df) {
         is_bare ~ "bare"
       )
     )
+  } else {
+    df %>%
+    mutate(
+      modal = case_when(
+        is_haveto ~ "haveto",
+        is_must ~ "must",
+        is_prob ~ "prob",
+        is_will ~ "will",
+        is_gotta ~ "got to"
+      )
+    )
+  }
 }
 
-# ========== 5) AVERAGES (PROPORTIONS + SE) ==========
-# By default, aggregate by inference; set by = c("inference","subject") etc. if you like.
 answer_props_long <- function(
   df_tagged,
   by = "inference",
   cols = NULL,
-  alpha = 0.11
+  alpha = 0.11,
+  id_col = NULL
 ) {
-  if (!is.character(by)) {
-    by <- as.character(by)
-  }
+  # helpers ---------------------------------------------------------------
+  clip01 <- function(x) pmin(1, pmax(0, x))
+
+  if (!is.character(by)) by <- as.character(by)
+
   if (is.null(cols)) {
     cols <- grep("^is_", names(df_tagged), value = TRUE)
     if (length(cols) == 0) {
@@ -258,33 +289,126 @@ answer_props_long <- function(
     }
   }
 
-  df_tagged %>%
-    pivot_longer(cols = all_of(cols), names_to = "type", values_to = "flag") %>%
-    mutate(
-      type = sub("^is_", "", type),
-      flag = suppressWarnings(as.numeric(flag))
+  if (is.null(id_col)) {
+    candidates <- intersect(
+      c("participant","subject","subj","uid","workerid","pid","id","participant_id"),
+      names(df_tagged)
+    )
+    if (length(candidates) == 0) {
+      stop("Could not auto-detect subject id column. Pass id_col= (e.g., 'participant').")
+    }
+    id_col <- candidates[1]
+  }
+
+  # long (trial-level) ----------------------------------------------------
+  long <- df_tagged %>%
+    tidyr::pivot_longer(cols = tidyselect::all_of(cols),
+                        names_to = "type", values_to = "flag") %>%
+    dplyr::mutate(
+      type = sub("^is_", "", .data$type),
+      flag = suppressWarnings(as.numeric(.data$flag))
     ) %>%
-    group_by(across(all_of(by)), type) %>%
-    summarise(
-      n = sum(!is.na(flag)),
-      k = sum(flag, na.rm = TRUE),
+    dplyr::filter(!is.na(.data$flag))
+
+  # trial totals per cell (for reporting + CP fallback) -------------------
+  agg_trials <- long %>%
+    dplyr::group_by(dplyr::across(tidyselect::all_of(c(by, "type")))) %>%
+    dplyr::summarise(
+      n = sum(!is.na(.data$flag)),
+      k = sum(.data$flag, na.rm = TRUE),
       mean = ifelse(n > 0, k / n, NA_real_),
-      # Clopper–Pearson exact CI via binom.test
-      lwr = ifelse(
-        n > 0,
-        binom.test(k, n, conf.level = 1 - alpha)$conf.int[1],
-        NA_real_
-      ),
-      upr = ifelse(
-        n > 0,
-        binom.test(k, n, conf.level = 1 - alpha)$conf.int[2],
-        NA_real_
-      ),
-      # OPTIONAL: a symmetric SE derived from the CP half-width (handy for geoms expecting 'se')
-      se = (upr - lwr) / (2 * qnorm(1 - alpha / 2)),
+      .groups = "drop"
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      lwr_cp_raw = ifelse(n > 0,
+                          stats::binom.test(k, n, conf.level = 1 - alpha)$conf.int[1],
+                          NA_real_),
+      upr_cp_raw = ifelse(n > 0,
+                          stats::binom.test(k, n, conf.level = 1 - alpha)$conf.int[2],
+                          NA_real_)
+    ) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(
+      lwr_cp = clip01(lwr_cp_raw),
+      upr_cp = clip01(upr_cp_raw)
+    )
+
+  # subject-level proportions per condition -------------------------------
+  subj_means <- long %>%
+    dplyr::group_by(dplyr::across(tidyselect::all_of(c(by, id_col, "type")))) %>%
+    dplyr::summarise(p = mean(.data$flag, na.rm = TRUE), .groups = "drop")
+
+  # per-subject overall mean across conditions (for normalization)
+  subj_overall <- subj_means %>%
+    dplyr::group_by(dplyr::across(tidyselect::all_of(c(by, id_col)))) %>%
+    dplyr::summarise(
+      m_s = mean(.data$p, na.rm = TRUE),
       .groups = "drop"
     )
+
+  # per-group J and grand mean m_g
+  J_tbl <- subj_means %>%
+    dplyr::group_by(dplyr::across(tidyselect::all_of(by))) %>%
+    dplyr::summarise(
+      J   = dplyr::n_distinct(.data$type),
+      m_g = mean(.data$p, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  # normalized scores (Cousineau), then Morey correction
+  norm <- subj_means %>%
+    dplyr::left_join(subj_overall, by = c(by, id_col)) %>%
+    dplyr::left_join(J_tbl, by = by) %>%
+    dplyr::mutate(yprime = .data$p - .data$m_s + .data$m_g)
+
+  ci_tbl <- norm %>%
+    dplyr::group_by(dplyr::across(tidyselect::all_of(c(by, "type")))) %>%
+    dplyr::summarise(
+      sd_norm = stats::sd(.data$yprime, na.rm = TRUE),
+      N = dplyr::n_distinct(.data[[id_col]]),
+      J = dplyr::first(.data$J),
+      mean_subj = mean(.data$p, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      # Morey correction factor; undefined when J <= 1
+      sd_morey = dplyr::if_else(J > 1, sd_norm * sqrt(J / (J - 1)), NA_real_),
+      se_mc    = sd_morey / sqrt(pmax(N, 1)),
+      tcrit    = stats::qt(1 - alpha / 2, df = pmax(N - 1, 1)),
+      half_mc  = tcrit * se_mc,
+      lwr_mc_raw = mean_subj - half_mc,
+      upr_mc_raw = mean_subj + half_mc,
+      lwr_mc = clip01(lwr_mc_raw),
+      upr_mc = clip01(upr_mc_raw)
+    )
+
+  # combine + fallback to CP where MC is not available --------------------
+  out <- agg_trials %>%
+    dplyr::left_join(ci_tbl, by = c(by, "type")) %>%
+    dplyr::mutate(
+      # choose MC if valid; else CP
+      lwr = dplyr::if_else(is.finite(lwr_mc) & !is.na(lwr_mc), lwr_mc, lwr_cp),
+      upr = dplyr::if_else(is.finite(upr_mc) & !is.na(upr_mc), upr_mc, upr_cp),
+      se  = dplyr::if_else(is.finite(se_mc) & !is.na(se_mc),
+                           se_mc,
+                           (upr_cp - lwr_cp) / (2 * stats::qt(1 - alpha / 2, df = pmax(n - 1, 1))))
+    ) %>%
+    dplyr::select(dplyr::all_of(by), type, n, k, mean,
+                  N, J,
+                  lwr, upr,
+                  se,
+                  lwr_mc_raw, upr_mc_raw, # (pre-truncation, for reference)
+                  lwr_cp_raw, upr_cp_raw) %>%
+    dplyr::mutate(
+      ci_method = dplyr::if_else(!is.na(J) & J > 1 & !is.na(N) & N > 1,
+                                 "Morey–Cousineau (truncated to [0,1])",
+                                 "Clopper–Pearson (truncated to [0,1])")
+    )
+
+  out
 }
+
 
 # Wide CP summary (mirrors your original names) --------------------------------
 # Produces columns like: m_<type>, lwr_<type>, upr_<type>, and also n
@@ -494,12 +618,43 @@ process_one_pcibex <- function(
   csv_path,
   correct_answers,
   reader = c("read.pcibex", "readr"),
-  qc_threshold = 0.80
+  qc_threshold = 0.80,
+  age_range = NULL,          # e.g., c(18, 40); NULL = no age filtering
+  age_inclusive = TRUE,      # inclusive bounds (>=, <=); FALSE = strict (>, <)
+  drop_na_age = TRUE,         # if TRUE, remove participants with NA age
+  bare = T
 ) {
   reader <- match.arg(reader)
   df <- read_pcibex_clean(csv_path, use_reader = reader)
 
+  # --- demographics and age filtering (subject-level) ---
+  demo_all <- get_demo(df)
+
+  if (!is.null(age_range)) {
+    if (!is.numeric(age_range) || length(age_range) != 2) {
+      stop("`age_range` must be numeric length-2 like c(18, 40).")
+    }
+    lo <- min(age_range, na.rm = TRUE)
+    hi <- max(age_range, na.rm = TRUE)
+
+    demo_kept <- demo_all %>%
+      { if (drop_na_age) dplyr::filter(., !is.na(age)) else . } %>%
+      { if (age_inclusive) dplyr::filter(., dplyr::between(age, lo, hi))
+        else dplyr::filter(., age > lo, age < hi) }
+
+    keep_subjects <- unique(demo_kept$subject)
+    excluded_by_age <- setdiff(unique(df$subject), keep_subjects)
+
+    # Keep only rows for subjects in the target age band
+    df <- df %>% dplyr::filter(subject %in% keep_subjects)
+  } else {
+    demo_kept <- demo_all
+    excluded_by_age <- character(0)
+  }
+
+  # --- split, QC on the age-filtered data, then tidy ---
   parts <- split_types(df)
+
   chk <- check_accuracy_qc(
     parts$check,
     correct_answers,
@@ -507,19 +662,29 @@ process_one_pcibex <- function(
   )
 
   exp_tidy <- parts$exp %>%
-    filter(!subject %in% chk$bad_subjects) %>%
-    tag_answer_types() %>%
-    add_modal_column()
+    dplyr::filter(!subject %in% chk$bad_subjects) %>%
+    tag_answer_types(., bare = bare) %>%
+    add_modal_column(., bare = bare)
+
   filler_tidy <- parts$filler %>%
-    filter(!subject %in% chk$bad_subjects) %>%
-    tag_answer_types() %>%
-    add_modal_column()
+    dplyr::filter(!subject %in% chk$bad_subjects) %>%
+    tag_answer_types(., bare = bare) %>%
+    add_modal_column(., bare = bare)
 
   list(
+    # QC (computed after any age filtering)
     check_tidy = chk$check_tidy,
     check_bins = chk$check_bins,
     bad_subjects = chk$bad_subjects,
-    demo = get_demo(df),
+
+    # Demographics for the final included set (after age filter)
+    demo = demo_kept,
+
+    # Age filter bookkeeping
+    age_range = if (is.null(age_range)) NULL else c(lo, hi),
+    excluded_by_age = excluded_by_age,
+
+    # Main tidy outputs
     exp_tidy = exp_tidy,
     filler_tidy = filler_tidy,
     exp_props = answer_props_long(exp_tidy, by = "inference"),
@@ -536,16 +701,20 @@ process_one_pcibex <- function(
 ## Procedure for both experiments
 
 
-- Platform and environment
+- **Platform and environment**
   - The experiments were conducted online in PCIbex (PennController for Ibex). The interface switched to fullscreen at the start of the main task and exited fullscreen at the end.
   - Participants were instructed to use a desktop or laptop with Google Chrome, a keyboard, and a mouse or trackpad in a distraction-free setting.
   - Total session time was approximately 25 minutes.
 
-- Consent and demographics
+<br>
+
+- **Consent and demographics**
   - After an introduction screen, participants viewed and downloaded a consent form and indicated consent to proceed.
   - A brief demographics form collected age, gender, location (state and country), computer type, native language, and other languages.
 
-- Design and counterbalancing
+<br>
+
+- **Design and counterbalancing**
   - Aim: the experiments tested the interpretive force of must compared to other modal elements, or the absence of a modal.
   - Participants were randomly assigned (between subjects) to one of four answer sets: bare, have to, will, prob (a separate CSV file per set).
   - Experimental, filler, and attention-check trials were fully intermixed and randomized for each participant.
@@ -557,29 +726,44 @@ process_one_pcibex <- function(
   - Each experimental item appeared in one of three context conditions: abductive, deductive, or inference.
   - Context conditions were assigned using a Latin square, so each participant saw exactly one context per item.
   - On every trial, the two response options were order-randomized.
-  - Between-experiment differences:
-    - Experiment 1 used SONA participants and included preambles that conveyed contextual information in an if-clause.
-    - Experiment 2 used Prolific participants and included a shorter preamble consisting only of a well, then... phrase.
 
-- Instructions and practice
+<br>
+
+- **Between-experiment differences:**
+  - Experiment 1 used SONA participants and included preambles that conveyed contextual information in an if-clause.
+  - Experiment 2 used Prolific participants and included a shorter preamble consisting only of a well, then... phrase.
+  - Experiment 3 used Prolific participants and replicated bare and haveto from Experiment 1
+  - Experiment 4 used 'got to' constructions with "well then" and "if p ," contrustions
+
+<br>
+
+- **Instructions and practice**
   - Participants read step-by-step instructions with two worked examples (one obvious and one less obvious).
   - Additional practice trials followed, using the same two-stage flow as the main task.
 
-- Trial structure (main task)
+<br>
+
+- **Trial structure (main task)**
   - Context presentation: participants saw a short, three-turn conversation (Speaker A – Speaker B – Speaker A) that provided the relevant context.
   - Dialogue (reading) phase: participants pressed the space bar to advance or were auto-advanced after 120 s. A Dialogue RT (ms) was recorded from dialogue onset to advance.
   - Choice phase: two candidate sentence completions appeared simultaneously. Participants selected the option they judged most appropriate; a 60 s timeout applied. An Answer RT (ms) was recorded from option onset to response.
   - After the response, the screen cleared and the next trial began.
 
-- Breaks
+<br>
+
+- **Breaks**
   - Brief on-screen breaks were inserted at regular intervals (about every four trials). Participants resumed by pressing the space bar.
 
-- Measures and logging
+<br>
+
+- **Measures and logging**
   - For each trial, the following were logged: item and condition labels (Type, Group, Item, Inference, ConditionName, Condition), the three dialogue lines (D1–D3), both options (A1–A2), the selected answer, Dialogue RT, Answer RT, and TrialNumber.
   - Practice trials were logged with the same structure and marked as practice.
 
-- Debrief and redirect
-  - Upon completion, results were submitted to the server, fullscreen ended, and participants were automatically redirected to a debrief and credit form hosted at UMD.
+<br>
+
+- **Debrief and redirect**
+  - Upon completion, results were submitted to the server, fullscreen ended, and participants were automatically redirected to a debrief and credit form hosted at UMD or Prolific.
 
 
 
@@ -834,6 +1018,48 @@ for (i in seq_along(exp_list)) {
 
 ### Answer Choice Summary
 
+
+We report target-response proportions by **inference** (*a, d, i*) and **type** (*must, prob, have to, will, bare*). Confidence intervals are Morey–Cousineau, truncated to \[0,1\]. 
+
+Per-cell trials and items increase across blocks:  
+
+- **prob**: *n* = 10, *N* = 5  
+- **will**: *n* = 10, *N* = 5  
+- **have to**: *n* = 14, *N* = 7  
+- **bare**: *n* = 22, *N* = 11
+
+Block: **prob** (n = 10; N = 5)
+
+- **a**: *prob* **0.70** (0.42–0.98) > *must* 0.30 (0.02–0.58)
+- **d**: *must* **0.70** (0.42–0.98) > *prob* 0.30 (0.02–0.58)
+- **i**: *prob* **0.60** (0.17–1.00), *must* 0.40 (0.00–0.83)
+
+**Takeaway:** Strong complementarity—*prob* peaks in **a**, *must* in **d**; **i** is mixed with wider CIs.
+
+Block: **will** (n = 10; N = 5)
+
+- **a**: *must* **1.00** (1.00–1.00); all others 0.  
+- **d**: *must* **0.80** (0.34–1.00); *will* 0.20 (0.00–0.66)
+- **i**: *must* **0.80** (0.52–1.00); *will* 0.20 (0.00–0.48)
+
+**Takeaway:** *Will* is at (or near) floor; *must* dominates, with a small *will* share in **d/i**.
+
+Block: **have to** (n = 14; N = 7)
+
+- **a**: *must* **0.93** (0.78–1.00); *have to* 0.07 (0.00–0.22)
+- **d**: *must* **0.93** (0.78–1.00); *have to* 0.07 (0.00–0.22)
+- **i**: *must* **0.71** (0.50–0.93); *have to* 0.29 (0.07–0.50)
+
+**Takeaway:** *Must* is clearly preferred; **i** shows a modest but reliable share for *have to*.
+
+Block: **bare** (n = 22; N = 11)
+
+- **a**: *must* **0.86** (0.73–1.00); *bare* 0.14 (0.00–0.27)
+- **d**: *must* **0.91** (0.73–1.00); *bare* 0.09 (0.00–0.27)
+- **i**: *must* **0.86** (0.73–1.00); *bare* 0.14 (0.00–0.27)
+
+**Takeaway:** *Must* overwhelmingly beats *bare* across all inference conditions; *bare* shows a small baseline.
+
 ```{r}
 cb_palette <- c(
   must = "#0072B2",
@@ -956,6 +1182,26 @@ legend <- cowplot::get_plot_component(
 )
 # cowplot::ggdraw(legend)
 
+
+get_y_from_build <- function(p) {
+  gb <- ggplot2::ggplot_build(p)
+  ys <- purrr::map(gb$data, function(d) {
+    cols <- intersect(c("y","ymin","ymax","yend","lower","upper"), names(d))
+    as.numeric(unlist(d[cols], use.names = FALSE))
+  })
+  vals <- unlist(ys, use.names = FALSE)
+  vals[is.finite(vals)]
+}
+
+plots <- list(p1, p2, p3, p4)
+global_ylim <- range(unlist(purrr::map(plots, get_y_from_build)), na.rm = TRUE)
+
+p1 <- p1 + coord_cartesian(ylim = global_ylim)
+p2 <- p2 + coord_cartesian(ylim = global_ylim)
+p3 <- p3 + coord_cartesian(ylim = global_ylim)
+p4 <- p4 + coord_cartesian(ylim = global_ylim)
+
+
 grid <- plot_grid(
   p1 + theme(legend.position = "none"),
   p2 + theme(legend.position = "none"),
@@ -971,8 +1217,6 @@ final
 
 
 ## Experiment 2
-
-
 
 ```{r}
 correct_answers <- c(
@@ -1013,7 +1257,6 @@ render_check_bins_side_by_side(exp2, columns = 4)
 
 ```
 
-
 <details>
 <summary>Click to expand Demographics</summary>
 
@@ -1051,6 +1294,51 @@ for (i in seq_along(exp_list)) {
 </details>
 
 ### Answer Choice Summary
+
+
+
+We report target-response proportions by **inference** (*a, d, i*) and **type** (*must, prob, have to, will, bare*). Confidence intervals are Morey–Cousineau, truncated to \[0,1\]. 
+
+Per-cell trials and items by block:  
+
+- **prob**: *n* ≈ 40, *N* = 20  
+- **will**: *n* = 40, *N* = 20  
+- **have to**: *n* = 42, *N* = 21  
+- **bare**: *n* = 36, *N* = 18  
+
+Block: **prob** (n ≈ 40; N = 20)
+
+- **a**: *prob* **0.538** (0.385–0.715) > *must* 0.462 (0.285–0.615)
+- **d**: *must* **0.725** (0.581–0.869) > *prob* 0.275 (0.131–0.419)
+- **i**: *must* **0.550** (0.399–0.701), *prob* 0.450 (0.299–0.601)
+
+**Takeaway:** Clear complementarity—*prob* peaks in **a**, *must* in **d**; **i** is near 50/50.
+
+Block: **will** (n = 40; N = 20)
+
+- **a**: *must* **0.950** (0.885–1.000); *will* 0.050 (0.000–0.115)
+- **d**: *must* **0.775** (0.631–0.919); *will* 0.225 (0.081–0.369)
+- **i**: *must* **0.900** (0.790–1.000); *will* 0.100 (0.000–0.210)
+
+**Takeaway:** *Must* dominates; *will* contributes small shares, largest in **d**.
+
+Block: **have to** (n = 42; N = 21)
+
+- **a**: *must* **0.929** (0.831–1.000); *have to* 0.071 (0.000–0.169)
+- **d**: *must* **0.714** (0.549–0.880); *have to* 0.286 (0.120–0.451)
+- **i**: *must* **0.905** (0.800–1.000); *have to* 0.095 (0.000–0.200)
+
+**Takeaway:** *Must* is preferred overall; **d** shows the largest *have to* share.
+
+Block: **bare** (n = 36; N = 18)
+
+- **a**: *must* **0.778** (0.604–0.952); *bare* 0.222 (0.048–0.396)
+- **d**: *must* **0.528** (0.334–0.722); *bare* 0.472 (0.278–0.666)
+- **i**: *must* **0.694** (0.539–0.849); *bare* 0.306 (0.151–0.461)
+
+**Takeaway:** Unlike Exp 1, *bare* takes a substantial share—especially in **d**—though *must* still leads overall.
+
+
 
 ```{r}
 
@@ -1114,8 +1402,6 @@ final
 
 ```
 
-
-
 ### Reading Times Summary
 
 ```{r}
@@ -1168,6 +1454,24 @@ legend <- cowplot::get_plot_component(
 )
 # cowplot::ggdraw(legend)
 
+get_y_from_build <- function(p) {
+  gb <- ggplot2::ggplot_build(p)
+  ys <- purrr::map(gb$data, function(d) {
+    cols <- intersect(c("y","ymin","ymax","yend","lower","upper"), names(d))
+    as.numeric(unlist(d[cols], use.names = FALSE))
+  })
+  vals <- unlist(ys, use.names = FALSE)
+  vals[is.finite(vals)]
+}
+
+plots <- list(p1, p2, p3, p4)
+global_ylim <- range(unlist(purrr::map(plots, get_y_from_build)), na.rm = TRUE)
+
+p1 <- p1 + coord_cartesian(ylim = global_ylim)
+p2 <- p2 + coord_cartesian(ylim = global_ylim)
+p3 <- p3 + coord_cartesian(ylim = global_ylim)
+p4 <- p4 + coord_cartesian(ylim = global_ylim)
+
 grid <- plot_grid(
   p1 + theme(legend.position = "none"),
   p2 + theme(legend.position = "none"),
@@ -1178,5 +1482,624 @@ grid <- plot_grid(
 
 final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
 final
+
+```
+
+### Age groups
+
+
+The results does not seem to be a function of age. But there are some mismatches.
+
+```{r}
+age_ranges <- list(c(18,45), c(46,80), c(0,100))
+age_labels <- vapply(age_ranges, function(x) sprintf("%d–%d", x[1], x[2]), "")
+
+process_modal_by_age <- function(modal, ranges, labels) {
+  purrr::map2(ranges, labels, function(ar, lab) {
+    res <- process_one_pcibex(
+      locate("exp2", paste0(modal, "_clean")),
+      correct_answers, reader = "readr", age_range = ar
+    )
+    res$exp_props %>% dplyr::mutate(age_band = lab)
+  }) |> dplyr::bind_rows()
+}
+
+prob_props   <- process_modal_by_age("prob",   age_ranges, age_labels)
+will_props   <- process_modal_by_age("will",   age_ranges, age_labels)
+haveto_props <- process_modal_by_age("haveto", age_ranges, age_labels)
+bare_props   <- process_modal_by_age("bare",   age_ranges, age_labels)
+
+
+plot_props_color_age <- function(props_long, keep_types = NULL, drop_zeros = TRUE,
+                             highlight_band = "0–100",
+                             highlight_fill = "gray",
+                             highlight_alpha = 0.45,
+                             fade_n = 200) {
+  p <- props_long %>%
+    dplyr::mutate(
+      type = factor(type, levels = type_levels),
+      age_band = if (!"age_band" %in% names(.)) factor("All")
+                 else factor(age_band, levels = age_labels)
+    )
+
+  if (!is.null(keep_types)) p <- dplyr::filter(p, type %in% keep_types)
+
+  if (drop_zeros) {
+    p <- p %>%
+      dplyr::group_by(type, age_band, inference) %>%
+      dplyr::filter(any(tidyr::replace_na(mean, 0) > 0)) %>%
+      dplyr::ungroup()
+  }
+
+  dodge <- position_dodge(width = 0.6)
+  age_lvls <- levels(p$age_band)
+  x_hi <- match(highlight_band, age_lvls)
+
+  # build a vertical gradient (bottom solid -> top transparent) in [0,1]
+  band_df <- NULL
+  if (!is.na(x_hi)) {
+    y_edges <- seq(0, 1, length.out = fade_n + 1)
+    band_df <- tibble::tibble(
+      xmin = x_hi - 0.5,
+      xmax = x_hi + 0.5,
+      ymin = head(y_edges, -1),
+      ymax = tail(y_edges, -1),
+      alpha = scales::rescale(1 - head(y_edges, -1), to = c(0, highlight_alpha))
+      # alpha largest at bottom (y=0), fades to 0 near top (y=1)
+    )
+  }
+
+  gp <- ggplot(p, aes(x = age_band, y = mean,
+                      color = type,
+                      group = type))
+
+  if (!is.null(band_df)) {
+    gp <- gp +
+      geom_rect(data = band_df,
+                aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, alpha = alpha),
+                inherit.aes = FALSE,
+                fill = highlight_fill, color = NA, show.legend = FALSE) +
+      scale_alpha_identity()
+  }
+
+  gp +
+    geom_point(position = dodge) +
+    geom_errorbar(aes(ymin = pmax(0, mean - se),
+                      ymax = pmin(1, mean + se)),
+                  width = 0.15, position = dodge) +
+    facet_wrap(~ inference) +
+    scale_y_continuous(limits = c(0, 1)) +
+    scale_x_discrete(drop = FALSE) +
+    scale_color_manual(values = cb_palette, limits = type_levels,
+                       breaks = type_levels, drop = FALSE) +
+    labs(x = "Age band", y = "Proportion", color = "Type") +
+    theme_minimal(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+p1 <- plot_props_color_age(prob_props,   keep_types = c("must","prob"))   + ggtitle("Prob")
+p2 <- plot_props_color_age(will_props,   keep_types = c("must","will"))   + ggtitle("Will")
+p3 <- plot_props_color_age(haveto_props, keep_types = c("must","haveto")) + ggtitle("Have to")
+p4 <- plot_props_color_age(bare_props,   keep_types = c("must","bare"))   + ggtitle("Bare")
+
+
+grid <- cowplot::plot_grid(
+  p1 + theme(legend.position = "none"),
+  p2 + theme(legend.position = "none"),
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- cowplot::plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.14))
+final + ggtitle("Facets = inference • X = age bands • color = type • shape = age band")
+```
+
+
+
+
+## Experiment 3
+
+
+
+
+```{r}
+correct_answers <- c(
+  "... the metro <span class='highlight'>was</span> open. ",
+  "... she <span class='highlight'>won</span> the competition.",
+  "... he <span class='highlight'>failed</span> the test.",
+  "... the machine <span class='highlight'>is</span> on."
+)
+
+cb_palette <- c(
+  must = "#0072B2",
+  prob = "#009E73",
+  will = "#56B4E9",
+  haveto = "#E69F00",
+  bare = "#CC79A7"
+)
+type_levels <- names(cb_palette)
+
+
+# One dataset at a time
+res_haveto <- process_one_pcibex(locate("exp3", "haveto_clean"), correct_answers, reader = "readr")
+res_bare <- process_one_pcibex(locate("exp3", "bare_clean"), correct_answers, reader = "readr")
+
+exp3 <- list(
+  haveto = res_haveto,
+  bare = res_bare
+)
+```
+
+### Participant Accuracy in Check Items
+
+```{r}
+render_check_bins_side_by_side(exp3, columns = 2)
+
+```
+
+
+<details>
+<summary>Click to expand Demographics</summary>
+
+```{r}
+#| panel: tabset
+#| output: asis
+
+exp_list <- exp3 # or exp1
+
+for (i in seq_along(exp_list)) {
+  exp <- exp_list[[i]]
+  tag <- get_tag(exp)
+
+  ages <- exp$demo$age
+  age_txt <- sprintf(
+    "Mean Age: %.2f (%d–%d)",
+    round(mean(ages, na.rm = TRUE), 2),
+    min(ages, na.rm = TRUE),
+    max(ages, na.rm = TRUE)
+  )
+
+  # Quarto tab title (one tab per iteration)
+  cat(sprintf("\n## %s\n\n", tag))
+  # Small subtitle line
+  cat(sprintf("_%s_\n\n", age_txt))
+
+  # Emit the gt table as inline HTML so it renders inside the tab
+  tbl <- build_demo_gt(exp)
+  cat(gt::as_raw_html(tbl, inline_css = TRUE))
+  cat("\n")
+}
+
+```
+
+</details>
+
+### Answer Choice Summary
+
+
+
+We report target-response proportions by **inference** (*a, d, i*) and **type** (*must, prob, have to, will, bare*). Confidence intervals are Morey–Cousineau, truncated to \[0,1\]. 
+
+Per-cell trials and items by block:
+
+- **have to**: *n* = 42, *N* = 21
+- **bare**: *n* = 40, *N* = 20
+
+Block: **have to** (n = 42; N = 21)
+
+- **a**: *must* **0.93** (0.86–1.00); *have to* 0.07 (0.00–0.15)
+- **d**: *must* **0.88** (0.77–0.99); *have to* 0.12 (0.01–0.23)
+- **i**: *must* **0.86** (0.76–0.95); *have to* 0.14 (0.05–0.24)
+
+**Takeaway:** *Must* clearly dominates; *have to* contributes a small but non-zero share, largest in **i**.
+
+Block: **bare** (n = 40; N = 20)
+
+- **a**: *must* **0.80** (0.66–0.94); *bare* 0.20 (0.06–0.34)
+- **d**: *must* **0.68** (0.51–0.85); *bare* 0.33 (0.16–0.50)
+- **i**: *must* **0.78** (0.62–0.93); *bare* 0.23 (0.07–0.38)
+
+**Takeaway:** *Bare* claims a substantial minority share—especially in **d**—though *must* remains the plurality across inference conditions.
+
+
+```{r}
+
+p3 <- plot_props_color(
+  exp3$haveto$exp_props,
+  keep_types = c("must", "haveto")
+) +
+  ggtitle("Have to")
+p4 <- plot_props_color(exp3$bare$exp_props, keep_types = c("must", "bare")) +
+  ggtitle("Bare")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+grid <- plot_grid(
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```
+
+
+
+### Reading Times Summary
+
+```{r}
+# plot_rt(exp2$prob$exp_rt)
+# plot_rt(res_will$exp_rt)
+# plot_rt(res_haveto$exp_rt)
+# plot_rt(res_bare$exp_rt)
+
+p3 <- plot_rt(exp3$haveto$exp_rt, keep_types = c("must", "haveto")) +
+  ggtitle("Have to")
+p4 <- plot_rt(exp3$bare$exp_rt, keep_types = c("must", "bare")) +
+  ggtitle("Bare")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+get_y_from_build <- function(p) {
+  gb <- ggplot2::ggplot_build(p)
+  ys <- purrr::map(gb$data, function(d) {
+    cols <- intersect(c("y","ymin","ymax","yend","lower","upper"), names(d))
+    as.numeric(unlist(d[cols], use.names = FALSE))
+  })
+  vals <- unlist(ys, use.names = FALSE)
+  vals[is.finite(vals)]
+}
+
+plots <- list(p3, p4)
+global_ylim <- range(unlist(purrr::map(plots, get_y_from_build)), na.rm = TRUE)
+
+p3 <- p3 + coord_cartesian(ylim = global_ylim)
+p4 <- p4 + coord_cartesian(ylim = global_ylim)
+
+grid <- plot_grid(
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```
+
+
+## Experiment 4
+
+
+
+
+```{r}
+correct_answers <- c(
+  "... the metro <span class='highlight'>was</span> open. ",
+  "... she <span class='highlight'>won</span> the competition.",
+  "... he <span class='highlight'>failed</span> the test.",
+  "... the machine <span class='highlight'>is</span> on."
+)
+
+cb_palette <- c(
+  must = "#0072B2",
+  gotta = "#CC3934"
+)
+type_levels <- names(cb_palette)
+
+
+# One dataset at a time
+res_cond <- process_one_pcibex(locate("exp4", "gotta_cond_clean"), correct_answers, reader = "readr", bare = F)
+res_well <- process_one_pcibex(locate("exp4", "gotta_wellthen_clean"), correct_answers, reader = "readr", bare = F)
+
+exp4 <- list(
+  cond = res_cond,
+  well = res_well
+)
+```
+
+### Participant Accuracy in Check Items
+
+```{r}
+render_check_bins_side_by_side(exp4, columns = 2)
+
+```
+
+
+<details>
+<summary>Click to expand Demographics</summary>
+
+```{r}
+#| panel: tabset
+#| output: asis
+
+exp_list <- exp4 # or exp1
+
+for (i in seq_along(exp_list)) {
+  exp <- exp_list[[i]]
+  tag <- get_tag(exp)
+
+  ages <- exp$demo$age
+  age_txt <- sprintf(
+    "Mean Age: %.2f (%d–%d)",
+    round(mean(ages, na.rm = TRUE), 2),
+    min(ages, na.rm = TRUE),
+    max(ages, na.rm = TRUE)
+  )
+
+  # Quarto tab title (one tab per iteration)
+  cat(sprintf("\n## %s\n\n", tag))
+  # Small subtitle line
+  cat(sprintf("_%s_\n\n", age_txt))
+
+  # Emit the gt table as inline HTML so it renders inside the tab
+  tbl <- build_demo_gt(exp)
+  cat(gt::as_raw_html(tbl, inline_css = TRUE))
+  cat("\n")
+}
+
+```
+
+</details>
+
+### Answer Choice Summary
+
+We compare the share of **must** vs **gotta** across inference conditions (*a, d, i*) under two preambles: an **if-p** conditional (*cond*) and a **well-then** discourse preamble (*well*).
+
+
+Preamble: **if-p** (*cond*)
+
+- **a**: *must* **0.974** (0.924–1.000); *gotta* 0.026 (0.000–0.076).  
+- **d**: *must* **0.947** (0.879–1.000); *gotta* 0.053 (0.000–0.121).  
+- **i**: *must* **1.000** (1.000–1.000); *gotta* 0.000.  
+
+**Takeaway:** Near-categorical preference for *must* under **if-p** across all inference conditions; *gotta* contributes only trace amounts in **a/d** and none in **i**.
+
+Preamble: **well-then** (*well*)
+
+- **a**: *must* **0.947** (0.879–1.000); *gotta* 0.053 (0.000–0.121).  
+- **d**: *must* **1.000** (1.000–1.000); *gotta* 0.000.  
+- **i**: *must* **0.921** (0.813–1.000); *gotta* 0.079 (0.000–0.187).  
+
+**Takeaway:** *Must* still dominates, but **well-then** allows a small *gotta* share—most notably in **i**—while *d* remains categorically *must*.
+
+
+
+```{r}
+
+p3 <- plot_props_color(
+  exp4$cond$exp_props,
+  keep_types = c("must", "gotta")
+) +
+  ggtitle("If p , ...")
+p4 <- plot_props_color(exp4$well$exp_props, keep_types = c("must", "gotta")) +
+  ggtitle("Well then, ...")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+grid <- plot_grid(
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```
+
+
+
+### Reading Times Summary
+
+```{r}
+# plot_rt(exp2$prob$exp_rt)
+# plot_rt(res_will$exp_rt)
+# plot_rt(res_haveto$exp_rt)
+# plot_rt(res_bare$exp_rt)
+
+cb_palette <- c(
+  must = "#0072B2",
+  `got to` = "#CC3934"
+)
+type_levels <- names(cb_palette)
+
+p3 <- plot_rt(exp4$cond$exp_rt, keep_types = c("must", "got to")) +
+  ggtitle("If p, ...")
+p4 <- plot_rt(exp4$well$exp_rt, keep_types = c("must", "got to")) +
+  ggtitle("Well, then ...")
+
+
+legend_plot <- ggplot(
+  tibble(
+    inference = factor("a", levels = c("a", "d", "i")),
+    mean = 0.5,
+    modal = factor(type_levels, levels = type_levels)
+  ),
+  aes(inference, mean, color = modal)
+) +
+  geom_point(size = 3, show.legend = TRUE) +
+  scale_color_manual(
+    values = cb_palette,
+    limits = type_levels,
+    breaks = type_levels,
+    drop = FALSE,
+    guide = guide_legend(title = NULL, override.aes = list(size = 4))
+  ) +
+  theme_minimal() +
+  guides(
+    fill = "none",
+    shape = "none",
+    linetype = "none",
+    alpha = "none",
+    size = "none"
+  ) +
+  theme(legend.position = "bottom")
+
+
+legend <- cowplot::get_plot_component(
+  legend_plot,
+  'guide-box-bottom',
+  return_all = TRUE
+)
+# cowplot::ggdraw(legend)
+
+get_y_from_build <- function(p) {
+  gb <- ggplot2::ggplot_build(p)
+  ys <- purrr::map(gb$data, function(d) {
+    cols <- intersect(c("y","ymin","ymax","yend","lower","upper"), names(d))
+    as.numeric(unlist(d[cols], use.names = FALSE))
+  })
+  vals <- unlist(ys, use.names = FALSE)
+  vals[is.finite(vals)]
+}
+
+plots <- list(p3, p4)
+global_ylim <- range(unlist(purrr::map(plots, get_y_from_build)), na.rm = TRUE)
+
+p3 <- p3 + coord_cartesian(ylim = global_ylim)
+p4 <- p4 + coord_cartesian(ylim = global_ylim)
+
+grid <- plot_grid(
+  p3 + theme(legend.position = "none"),
+  p4 + theme(legend.position = "none"),
+  ncol = 2
+)
+
+final <- plot_grid(grid, legend, ncol = 1, rel_heights = c(1, 0.12))
+final
+
+```
+
+## Overall 
+
+```{r}
+all_props <- rbind(
+exp1$prob$exp_props %>% filter(type == "prob") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$prob$demo$age ))),
+exp1$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$haveto$demo$age ))),
+exp1$will$exp_props %>% filter(type == "will") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$will$demo$age ))),
+exp1$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$bare$demo$age ))),
+exp2$prob$exp_props %>% filter(type == "prob") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$prob$demo$age ))),
+exp2$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$haveto$demo$age ))),
+exp2$will$exp_props %>% filter(type == "will") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$will$demo$age ))),
+exp2$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$bare$demo$age ))),
+exp3$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp3", preamble = "cond", mean_age = round(mean(exp3$haveto$demo$age ))),
+exp3$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp3", preamble = "cond", mean_age = round(mean(exp3$bare$demo$age ))),
+exp4$cond$exp_props %>% filter(type == "gotta") %>% mutate(exp = "exp4", preamble = "cond", mean_age = round(mean(exp4$cond$demo$age ))),
+exp4$well$exp_props %>% filter(type == "gotta") %>% mutate(exp = "exp4", preamble = "well", mean_age = round(mean(exp4$cond$demo$age )))
+)
+
+
+all_props %>% 
+  mutate(inf = case_when(
+        inference == "a" ~ "abductive",
+        inference == "d" ~ "deductive",
+        inference == "i" ~ "inductive"
+      )) %>% 
+  mutate(mean = round(mean,2), lwr = round(lwr ,2), upr = round(upr, 2)) %>%
+  select(type, preamble, Exp=exp, age = mean_age, inference = inf, Mean=mean, `Lower CI`=lwr, `Upper CI`=upr) %>% 
+  gt(groupname_col = "type",  rowname_col = c("preamble"))
 
 ```

@@ -95,3 +95,17 @@ drop_penultimate_pcibex(
 )
 drop_penultimate_pcibex(locate("exp2", "will"), locate("exp2", "will_clean"))
 drop_penultimate_pcibex(locate("exp2", "prob"), locate("exp2", "prob_clean"))
+
+drop_penultimate_pcibex(locate("exp3", "bare"), locate("exp3", "bare_clean"))
+drop_penultimate_pcibex(
+  locate("exp3", "haveto"),
+  locate("exp3", "haveto_clean")
+)
+drop_penultimate_pcibex(
+  locate("exp4", "gotta_cond"),
+  locate("exp4", "gotta_cond_clean")
+)
+drop_penultimate_pcibex(
+  locate("exp4", "gotta_wellthen"),
+  locate("exp4", "gotta_wellthen_clean")
+)

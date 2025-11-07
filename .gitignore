@@ -1,4 +1,2 @@
-*/*/exp2_bare.csv
-*/*/exp2_will.csv
-*/*/exp2_haveto.csv
-*/*/exp2_prob.csv
+**/exp*.csv
+!**/exp*_clean.csv
