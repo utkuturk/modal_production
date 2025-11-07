@@ -2100,6 +2100,6 @@ all_props %>%
       )) %>% 
   mutate(mean = round(mean,2), lwr = round(lwr ,2), upr = round(upr, 2)) %>%
   select(type, Preamble=preamble, Exp=exp, age = mean_age, inference = inf, Mean=mean, `Lower CI`=lwr, `Upper CI`=upr) %>% 
-  gt(groupname_col = "type",  rowname_col = c("exp"))
+  gt(groupname_col = "type",  rowname_col = c("Exp"))
 
 ```
