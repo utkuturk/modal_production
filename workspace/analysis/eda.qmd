@@ -2077,18 +2077,18 @@ final
 
 ```{r}
 all_props <- rbind(
-exp1$prob$exp_props %>% filter(type == "prob") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$prob$demo$age ))),
-exp1$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$haveto$demo$age ))),
-exp1$will$exp_props %>% filter(type == "will") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$will$demo$age ))),
-exp1$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp1", preamble = "cond", mean_age = round(mean(exp1$bare$demo$age ))),
-exp2$prob$exp_props %>% filter(type == "prob") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$prob$demo$age ))),
-exp2$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$haveto$demo$age ))),
-exp2$will$exp_props %>% filter(type == "will") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$will$demo$age ))),
-exp2$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp2", preamble = "well", mean_age = round(mean(exp2$bare$demo$age ))),
-exp3$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp3", preamble = "cond", mean_age = round(mean(exp3$haveto$demo$age ))),
-exp3$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp3", preamble = "cond", mean_age = round(mean(exp3$bare$demo$age ))),
-exp4$cond$exp_props %>% filter(type == "gotta") %>% mutate(exp = "exp4", preamble = "cond", mean_age = round(mean(exp4$cond$demo$age ))),
-exp4$well$exp_props %>% filter(type == "gotta") %>% mutate(exp = "exp4", preamble = "well", mean_age = round(mean(exp4$cond$demo$age )))
+exp1$prob$exp_props %>% filter(type == "prob") %>% mutate(exp = "exp1", preamble = "If p, ...", mean_age = round(mean(exp1$prob$demo$age ))),
+exp1$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp1", preamble = "If p, ...", mean_age = round(mean(exp1$haveto$demo$age ))),
+exp1$will$exp_props %>% filter(type == "will") %>% mutate(exp = "exp1", preamble = "If p, ...", mean_age = round(mean(exp1$will$demo$age ))),
+exp1$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp1", preamble = "If p, ...", mean_age = round(mean(exp1$bare$demo$age ))),
+exp2$prob$exp_props %>% filter(type == "prob") %>% mutate(exp = "exp2", preamble = "Well, then ...", mean_age = round(mean(exp2$prob$demo$age ))),
+exp2$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp2", preamble = "Well, then ...", mean_age = round(mean(exp2$haveto$demo$age ))),
+exp2$will$exp_props %>% filter(type == "will") %>% mutate(exp = "exp2", preamble = "Well, then ...", mean_age = round(mean(exp2$will$demo$age ))),
+exp2$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp2", preamble = "Well, then ...", mean_age = round(mean(exp2$bare$demo$age ))),
+exp3$haveto$exp_props %>% filter(type == "haveto") %>% mutate(exp = "exp3", preamble = "If p, ...", mean_age = round(mean(exp3$haveto$demo$age ))),
+exp3$bare$exp_props %>% filter(type == "bare") %>% mutate(exp = "exp3", preamble = "If p, ...", mean_age = round(mean(exp3$bare$demo$age ))),
+exp4$cond$exp_props %>% filter(type == "gotta") %>% mutate(exp = "exp4", preamble = "If p, ...", mean_age = round(mean(exp4$cond$demo$age ))),
+exp4$well$exp_props %>% filter(type == "gotta") %>% mutate(exp = "exp4", preamble = "Well, then ...", mean_age = round(mean(exp4$cond$demo$age )))
 )
 
 
@@ -2099,7 +2099,7 @@ all_props %>%
         inference == "i" ~ "inductive"
       )) %>% 
   mutate(mean = round(mean,2), lwr = round(lwr ,2), upr = round(upr, 2)) %>%
-  select(type, preamble, Exp=exp, age = mean_age, inference = inf, Mean=mean, `Lower CI`=lwr, `Upper CI`=upr) %>% 
-  gt(groupname_col = "type",  rowname_col = c("preamble"))
+  select(type, Preamble=preamble, Exp=exp, age = mean_age, inference = inf, Mean=mean, `Lower CI`=lwr, `Upper CI`=upr) %>% 
+  gt(groupname_col = "type",  rowname_col = c("exp"))
 
 ```
